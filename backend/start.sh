@@ -16,5 +16,7 @@ fi
 # Start a new tmux session with two windows:
 #  - window 1: API (uvicorn)
 #  - window 2: Cloudflare tunnel
-exec tmux new-session -s telescope -n api "uvicorn main:app --host 0.0.0.0 --port 8000" \; \
-    new-window -n cloudflare "cloudflared tunnel run telescope-api"
+tmux new-session -d -s telescope -n main "uvicorn main:app --host 0.0.0.0 --port 8000"
+tmux split-window -v "cloudflared tunnel run telescope-api"
+tmux attach -t telescope
+
