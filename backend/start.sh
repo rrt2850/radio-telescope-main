@@ -5,9 +5,6 @@ REPO_DIR="/home/radioastro/radio-telescope-main/backend"
 
 cd "$REPO_DIR"
 
-# Optional: only use this when needed, not every boot
-#pip install -r requirements.txt
-
 # Kill existing session if it exists (so reboot doesn't spawn infinite sessions)
 if tmux has-session -t telescope 2>/dev/null; then
     tmux kill-session -t telescope
