@@ -5,6 +5,8 @@ from pydantic import BaseModel
 from robutils import CoordsTo
 import serial
 
+from fastapi.middleware.cors import CORSMiddleware
+
 class PointRequest(BaseModel):
     ra: float
     dec: float
@@ -12,6 +14,21 @@ class PointRequest(BaseModel):
 app = FastAPI(
     title="Radio Telescope Control API",
     description="Backend API to compute telescope movement and send commands to the Arduino",
+)
+
+origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,      # or ["*"] while testing
+    allow_credentials=True,
+    allow_methods=["*"],        # allow POST, OPTIONS, etc.
+    allow_headers=["*"],
 )
 
 # Telescope coordinates
