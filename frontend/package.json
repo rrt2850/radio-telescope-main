@@ -16,6 +16,7 @@
     "@wwtelescope/engine": "^7.31.0",
     "@wwtelescope/research-app": "^0.18.0",
     "@wwtelescope/research-app-messages": "^0.18.1",
+    "axios": "^1.13.2",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
   },

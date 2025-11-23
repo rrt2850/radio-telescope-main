@@ -1,8 +1,13 @@
 # backend/main.py
 from fastapi import FastAPI, Query
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 from robutils import CoordsTo
 import serial
+
+class PointRequest(BaseModel):
+    ra: float
+    dec: float
 
 app = FastAPI(
     title="Radio Telescope Control API",
@@ -42,7 +47,9 @@ def SendToArduino(az: float, alt: float):
 
 
 @app.post("/point")
-def Point(ra: float = Query(...), dec: float = Query(...)):
+def Point(req: PointRequest):
+    ra = req.ra
+    dec = req.dec
     """
     Convert RA/DEC to AZ/ALT and send movement command to Arduino.
     """
