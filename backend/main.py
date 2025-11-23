@@ -31,9 +31,12 @@ def SendToArduino(az: float, alt: float):
     Raise an error if Arduino is not connected.
     """
     if arduino is None:
-        raise RuntimeError("Arduino serial connection is not available.")
+        try:
+            arduino = serial.Serial('/dev/ttyACM0', 115200, timeout=0.1)
+        except:
+            raise RuntimeError("Arduino serial connection is not available.")
 
-    command = f"AZ:{az:.2f},ALT:{alt:.2f}\n"
+    command = f"G{az:.5f}e{alt:.5f};"
     arduino.write(command.encode("ascii"))
     return command
 
