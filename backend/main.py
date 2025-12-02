@@ -53,7 +53,10 @@ def point(req: PointRequest):
         )
 
     try:
-        az, alt = CoordsTo(LAT, LONG, HEIGHT, req.ra, req.dec)
+        if req.ra and req.dec:
+            az, alt = CoordsTo(LAT, LONG, HEIGHT, req.ra, req.dec)
+        else:
+            alt, az = req.alt, req.az
     except Exception as e:
         return JSONResponse(
             status_code=500,
