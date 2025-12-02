@@ -6,17 +6,18 @@ import Button from '@mui/material/Button';
 import axios from 'axios';
 
 
-export const MapControllerAltAz = () => {
-    const [alt, setAlt] = useState("0");
-    const [az, setAz] = useState("0");
+export const MapController = () => {
+    const [ra, setRa] = useState("0");
+    const [dec, setDec] = useState("0");
+    const [fov, setFov] = useState("90");
 
     const handleSubmit = async () => {
         try {
             const response = await axios.post(
                 'https://spex-telescope-backend.online/point',
                 {
-                    alt: Number(alt),
-                    az: Number(az)
+                    ra: Number(ra),
+                    dec: Number(dec)
                 }
             );
             console.log(response.data);
@@ -25,25 +26,35 @@ export const MapControllerAltAz = () => {
         }
     };
 
+
+
+
+
+    const onChange = (newRa: string, newDec: string, newFov: string) => {
+        setRa(newRa);
+        setDec(newDec);
+        setFov(newFov);
+    }
+
     return (
         <Box display="flex" gap={4}>
             <Stack spacing={2} direction="column">
                 <Box display="flex" alignItems="center" gap={1}>
-                    <Typography variant="body1">Alt:</Typography>
+                    <Typography variant="body1">RA:</Typography>
                     <TextField
                         type="number"
                         size="small"
-                        value={alt}
-                        onChange={(e) => setAlt(e.target.value)}
+                        value={ra}
+                        onChange={(e) => setRa(e.target.value)}
                     />
                 </Box>
                 <Box display="flex" alignItems="center" gap={1}>
-                    <Typography variant="body1">Az:</Typography>
+                    <Typography variant="body1">Dec:</Typography>
                     <TextField
                         type="number"
                         size="small"
-                        value={az}
-                        onChange={(e) => setAz(e.target.value)}
+                        value={dec}
+                        onChange={(e) => setDec(e.target.value)}
                     />
                 </Box>
 

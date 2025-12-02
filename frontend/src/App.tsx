@@ -1,11 +1,9 @@
-import { MapControllerAltAz } from "./components/MapControllerAltAz";
-import { MapControllerRaDec } from "./components/MapControllerRaDec";
+import { MapController } from "./components/MapController";
 
 function App() {
 	return (
 		<>
-			<MapControllerRaDec />
-			<MapControllerAltAz />
+			<MapController />
 		</>
 	);
 }
