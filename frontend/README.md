@@ -1,10 +1,13 @@
 # Radio Telescope Frontend
 
-A minimal React + Vite interface for sending point or track commands to the Radio Telescope backend. The UI exposes right ascension, declination, and optional tracking duration inputs that POST directly to the API.
+A React + Vite interface for sending point or track commands to the Radio Telescope backend. The UI exposes right ascension, declination, and optional tracking duration inputs that POST directly to the API.
+
+## Prerequisites
+- Install the current node.js version: https://nodejs.org/en/download
 
 ## Getting Started
 
-1. Install dependencies:
+1. Install dependencies if you haven't run `./bootstrap.ps1` in the parent directory:
 
    ```bash
    npm install
