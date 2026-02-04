@@ -1,0 +1,57 @@
+:root {
+	--color-bg: #f4f6fb;
+	--color-text: #0e1b2b;
+	--color-surface: #ffffff;
+	--color-border: #c7d2e3;
+	--color-shadow: rgba(10, 20, 35, 0.15);
+}
+
+:root[data-theme="dark"] {
+	--color-bg: #0b1118;
+	--color-text: #e6edf6;
+	--color-surface: #1a2433;
+	--color-border: #2f3c4f;
+	--color-shadow: rgba(0, 0, 0, 0.45);
+}
+
+body {
+	margin: 0;
+	font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+	background: var(--color-bg);
+	color: var(--color-text);
+}
+
+#root,
+.app {
+	min-height: 100vh;
+	background: var(--color-bg);
+	color: var(--color-text);
+}
+
+.theme-toggle {
+	position: fixed;
+	top: 16px;
+	right: 16px;
+	z-index: 1000;
+	padding: 10px 16px;
+	border-radius: 999px;
+	border: 1px solid var(--color-border);
+	background: var(--color-surface);
+	color: var(--color-text);
+	box-shadow: 0 10px 24px var(--color-shadow);
+	font-size: 0.9rem;
+	font-weight: 600;
+	letter-spacing: 0.01em;
+	cursor: pointer;
+	transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+	&:hover {
+		transform: translateY(-1px);
+		box-shadow: 0 12px 28px var(--color-shadow);
+	}
+
+	&:focus-visible {
+		outline: 2px solid var(--color-text);
+		outline-offset: 2px;
+	}
+}
