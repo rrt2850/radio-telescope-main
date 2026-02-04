@@ -55,3 +55,23 @@ body {
 		outline-offset: 2px;
 	}
 }
+
+.MuiOutlinedInput-root {
+	color: var(--color-text);
+
+	.MuiOutlinedInput-notchedOutline {
+		border-color: var(--color-text);
+	}
+
+	&:hover .MuiOutlinedInput-notchedOutline {
+		border-color: var(--color-text);
+	}
+
+	&.Mui-focused .MuiOutlinedInput-notchedOutline {
+		border-color: var(--color-text);
+	}
+}
+
+.MuiInputBase-input {
+	color: var(--color-text);
+}
