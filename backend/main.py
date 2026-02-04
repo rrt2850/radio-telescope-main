@@ -1,7 +1,8 @@
 from fastapi import FastAPI, BackgroundTasks
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
+from typing import Optional
 
 from robutils import CoordsTo
 from ArduinoController import ArduinoController
@@ -10,8 +11,23 @@ import constants
 from tracking import IsTracking, StartTrackingBackground
 
 class PointRequest(BaseModel):
-    ra: float
-    dec: float
+    ra: Optional[float] = None
+    dec: Optional[float] = None
+    az: Optional[float] = None
+    alt: Optional[float] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_coordinates(cls, values):
+        ra, dec = values.get("ra"), values.get("dec")
+        az, alt = values.get("az"), values.get("alt")
+
+        if (ra is not None and dec is not None) and (az is None and alt is None):
+            return values
+        elif (az is not None and alt is not None) and (ra is None and dec is None):
+            return values
+        raise ValueError("Must provide either (ra, dec) or (az, alt), but not both. Also don't send them as tuples, I just grouped them to make this easier to read")
+
 
 
 class TrackRequest(PointRequest):
@@ -73,12 +89,12 @@ def point(req: PointRequest):
         )
 
     try:
-        az, alt = CoordsTo(constants.LAT, constants.LONG, constants.HEIGHT, req.ra, req.dec)
+        if req.ra is not None and req.dec is not None:
+            az, alt = CoordsTo(constants.LAT, constants.LONG, constants.HEIGHT, req.ra, req.dec)
+        else:
+            az, alt = req.az, req.alt
     except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"error": "Invalid coordinates", "detail": str(e)},
-        )
+        return JSONResponse(status_code=500, content={"error": "Coordinate error", "detail": str(e)})
 
     if alt < constants.MIN_ANGLE:
         return JSONResponse(
