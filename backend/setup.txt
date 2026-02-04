@@ -26,3 +26,8 @@ sudo apt-get update && sudo apt-get install cloudflared
 - Launch the stuff you set up in the config:
     - cloudflared tunnel route dns telescope-api spex-telescope-backend.online
     - cloudflared tunnel run telescope-api
+
+Services:
+Here are some commands to check that the services are running and see logs:
+journalctl -u telescope-backend -f
+journalctl -u cloudflare-starter -f
