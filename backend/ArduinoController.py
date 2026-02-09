@@ -33,7 +33,7 @@ class ArduinoController:
             if not self.IsConnected():
                 raise RuntimeError("Arduino not connected")
 
-            cmd = f"G{az:.5f}e{alt:.5f};"
+            cmd = f"G{alt:.5f}e{az:.5f};"
             self.ser.write(cmd.encode("ascii"))
 
             self.waitForDone()
