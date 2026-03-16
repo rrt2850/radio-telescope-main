@@ -50,7 +50,7 @@ export const MapController = () => {
                 };
             }
 
-            const response = await axios.post(isTrackMode ? '/track' : '/point', payload);
+            const response = await axios.post(isTrackMode ? 'https://spex-telescope-backend.online/track' : 'https://spex-telescope-backend.online/point', payload);
             console.log(response.data);
         } catch (error) {
             console.error('Error sending request:', error);
