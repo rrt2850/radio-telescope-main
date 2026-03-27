@@ -117,7 +117,9 @@ def loadCalibration():
             return json.load(f)
     except:
         print("No calibration file found, calibrating")
-        return calibrateMagnetometer(imu)
+        fart = calibrateMagnetometer(imu)
+        input("continue?")
+        return fart
 
 
 magCal = loadCalibration()
