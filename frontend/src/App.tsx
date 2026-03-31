@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ThemeProvider, createTheme } from "@mui/material/styles";
 import { CssBaseline } from "@mui/material";
 import { MapController } from "./components/MapController/MapController";
+import { RadioViewer } from "./components/RadioViewer";
 import "./App.scss";
 
 function App() {
@@ -42,7 +43,10 @@ function App() {
 					{isDarkMode ? "Light mode" : "Dark mode"}
 				</button>
 
-				<MapController />
+				<div className="app-content">
+					<MapController />
+					<RadioViewer />
+				</div>
 			</div>
 		</ThemeProvider>
 	);
