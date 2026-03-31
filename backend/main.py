@@ -9,6 +9,7 @@ from ArduinoController import ArduinoController
 
 import constants
 from tracking import IsTracking, StartTrackingBackground
+from radio_service import RadioDataService
 
 class PointRequest(BaseModel):
     ra: Optional[float] = None
@@ -50,10 +51,13 @@ app.add_middleware(
 )
 
 arduino = ArduinoController(port="/dev/ttyACM0", baudrate=115200)
+radio_service = RadioDataService()
 
 
 @app.on_event("startup")
 def startup():
+    radio_service.start()
+
     try:
         arduino.Connect()
     except Exception as e:
@@ -62,6 +66,8 @@ def startup():
 
 @app.on_event("shutdown")
 def shutdown():
+    radio_service.stop()
+
     try:
         arduino.Close()
     except Exception as e:
@@ -167,3 +173,8 @@ def track(req: TrackRequest, backgroundTasks: BackgroundTasks):
         "dec": req.dec,
         "duration": req.duration,
     }
+
+
+@app.get("/radio")
+def radio_data():
+    return radio_service.get_payload()
