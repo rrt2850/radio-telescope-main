@@ -140,16 +140,26 @@ export const RadioViewer = () => {
     };
 
     const updateSignalConfig = async () => {
+        const submittedConfig = {
+            center_freq_hz: Number(centerFreqHzInput),
+            bandwidth_hz: Number(bandwidthHzInput),
+            gain: gainInput.trim() || 'auto',
+            n_ave: Number(nAveInput),
+        };
+
+        setDirtyInputs({
+            center_freq_hz: false,
+            bandwidth_hz: false,
+            gain: false,
+            n_ave: false,
+        });
+        setPendingSignalConfig(submittedConfig);
         setIsSavingMode(true);
         try {
-            const response = await axios.post<RadioPayload>(`${RADIO_ENDPOINT}/config`, {
-                center_freq_hz: Number(centerFreqHzInput),
-                bandwidth_hz: Number(bandwidthHzInput),
-                gain: gainInput.trim() || 'auto',
-                n_ave: Number(nAveInput),
-            });
+            const response = await axios.post<RadioPayload>(`${RADIO_ENDPOINT}/config`, submittedConfig);
             setPayload(response.data);
         } catch (error) {
+            setPendingSignalConfig(null);
             console.error('Failed to update radio signal config', error);
         } finally {
             setIsSavingMode(false);
