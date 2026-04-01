@@ -11,6 +11,13 @@ SAMPLE_RATE_HZ = 2.4e6
 FFT_SIZE = 1024
 READ_SIZE = 4096
 UPDATE_INTERVAL_SECONDS = 1.0
+MIN_CENTER_FREQ_HZ = 1.35e9
+MAX_CENTER_FREQ_HZ = 1.50e9
+ALLOWED_SAMPLE_RATES_HZ = (1.024e6, 2.4e6)
+MIN_GAIN_DB = 0.0
+MAX_GAIN_DB = 49.6
+MIN_N_AVE = 1
+MAX_N_AVE = 4096
 
 
 @dataclass
@@ -20,6 +27,9 @@ class RadioSnapshot:
     peak_freq_hz: float
     peak_power_db: float
     source: str
+    bandwidth_hz: float
+    gain: str | float
+    n_ave: int
     record_mode: str
     observation_mode: str
     integration_count: int
@@ -42,6 +52,10 @@ class RadioDataService:
         self._error: Optional[str] = None
         self._sdr = None
         self._window = np.hanning(FFT_SIZE)
+        self._center_freq_hz = CENTER_FREQ_HZ
+        self._sample_rate_hz = SAMPLE_RATE_HZ
+        self._gain: str | float = "auto"
+        self._n_ave = 32
         self._record_mode = "average"  # "instant" | "average"
         self._observation_mode = "spectrum"  # "spectrum" | "hotcold"
         self._integration_sum: Optional[np.ndarray] = None
@@ -85,6 +99,9 @@ class RadioDataService:
                 "peak_freq_hz": snapshot.peak_freq_hz,
                 "peak_power_db": snapshot.peak_power_db,
                 "source": snapshot.source,
+                "bandwidth_hz": snapshot.bandwidth_hz,
+                "gain": snapshot.gain,
+                "n_ave": snapshot.n_ave,
                 "record_mode": snapshot.record_mode,
                 "observation_mode": snapshot.observation_mode,
                 "integration_count": snapshot.integration_count,
@@ -96,7 +113,15 @@ class RadioDataService:
             },
         }
 
-    def set_modes(self, record_mode: Optional[str] = None, observation_mode: Optional[str] = None) -> None:
+    def set_config(
+        self,
+        record_mode: Optional[str] = None,
+        observation_mode: Optional[str] = None,
+        center_freq_hz: Optional[float] = None,
+        bandwidth_hz: Optional[float] = None,
+        gain: Optional[str] = None,
+        n_ave: Optional[int] = None,
+    ) -> None:
         with self._lock:
             if record_mode is not None:
                 if record_mode not in ("instant", "average"):
@@ -109,6 +134,32 @@ class RadioDataService:
                 if observation_mode not in ("spectrum", "hotcold"):
                     raise ValueError("observation_mode must be 'spectrum' or 'hotcold'")
                 self._observation_mode = observation_mode
+            if center_freq_hz is not None:
+                center_freq_hz = float(center_freq_hz)
+                if center_freq_hz < MIN_CENTER_FREQ_HZ or center_freq_hz > MAX_CENTER_FREQ_HZ:
+                    raise ValueError(
+                        f"center_freq_hz must be between {MIN_CENTER_FREQ_HZ} and {MAX_CENTER_FREQ_HZ}"
+                    )
+                self._center_freq_hz = center_freq_hz
+            if bandwidth_hz is not None:
+                bandwidth_hz = float(bandwidth_hz)
+                if bandwidth_hz not in ALLOWED_SAMPLE_RATES_HZ:
+                    raise ValueError(f"bandwidth_hz must be one of {ALLOWED_SAMPLE_RATES_HZ}")
+                self._sample_rate_hz = bandwidth_hz
+            if gain is not None:
+                normalized_gain = gain.strip().lower()
+                if normalized_gain == "auto":
+                    self._gain = "auto"
+                else:
+                    numeric_gain = float(gain)
+                    if numeric_gain < MIN_GAIN_DB or numeric_gain > MAX_GAIN_DB:
+                        raise ValueError(f"gain must be 'auto' or between {MIN_GAIN_DB} and {MAX_GAIN_DB}")
+                    self._gain = numeric_gain
+            if n_ave is not None:
+                n_ave = int(n_ave)
+                if n_ave < MIN_N_AVE or n_ave > MAX_N_AVE:
+                    raise ValueError(f"n_ave must be between {MIN_N_AVE} and {MAX_N_AVE}")
+                self._n_ave = n_ave
 
     def capture_cold_profile(self) -> bool:
         with self._lock:
@@ -118,7 +169,6 @@ class RadioDataService:
             return True
 
     def _run(self):
-        freqs = np.fft.fftshift(np.fft.fftfreq(FFT_SIZE, d=1.0 / SAMPLE_RATE_HZ)) + CENTER_FREQ_HZ
         use_simulated = not self._open_sdr()
 
         with self._lock:
@@ -126,10 +176,19 @@ class RadioDataService:
 
         while not self._stop_event.is_set():
             try:
-                power_db = self._read_power_simulated(freqs) if use_simulated else self._read_power_hardware()
                 with self._lock:
                     record_mode = self._record_mode
                     observation_mode = self._observation_mode
+                    center_freq_hz = self._center_freq_hz
+                    sample_rate_hz = self._sample_rate_hz
+                    gain = self._gain
+                    n_ave = self._n_ave
+
+                freqs = np.fft.fftshift(np.fft.fftfreq(FFT_SIZE, d=1.0 / sample_rate_hz)) + center_freq_hz
+
+                if not use_simulated:
+                    self._apply_hardware_settings(sample_rate_hz, center_freq_hz, gain)
+                power_db = self._read_power_simulated(freqs) if use_simulated else self._read_power_hardware()
 
                 if record_mode == "average":
                     if self._integration_sum is None:
@@ -138,6 +197,9 @@ class RadioDataService:
                     self._integration_sum += power_db
                     self._integration_count += 1
                     averaged_power = self._integration_sum / max(1, self._integration_count)
+                    if self._integration_count >= n_ave:
+                        self._integration_sum = None
+                        self._integration_count = 0
                 else:
                     averaged_power = power_db
                     self._integration_sum = None
@@ -154,10 +216,13 @@ class RadioDataService:
 
                 snapshot = RadioSnapshot(
                     timestamp=time.time(),
-                    center_freq_hz=CENTER_FREQ_HZ,
+                    center_freq_hz=center_freq_hz,
                     peak_freq_hz=float(freqs[peak_idx]),
                     peak_power_db=float(peak_source[peak_idx]),
                     source="simulation" if use_simulated else "rtl-sdr",
+                    bandwidth_hz=sample_rate_hz,
+                    gain=gain,
+                    n_ave=n_ave,
                     record_mode=record_mode,
                     observation_mode=observation_mode,
                     integration_count=int(self._integration_count),
@@ -183,9 +248,9 @@ class RadioDataService:
             from rtlsdr import RtlSdr
 
             self._sdr = RtlSdr()
-            self._sdr.sample_rate = SAMPLE_RATE_HZ
-            self._sdr.center_freq = CENTER_FREQ_HZ
-            self._sdr.gain = "auto"
+            self._sdr.sample_rate = self._sample_rate_hz
+            self._sdr.center_freq = self._center_freq_hz
+            self._sdr.gain = self._gain
             return True
         except Exception as exc:
             self._error = f"RTL-SDR unavailable, using simulated radio data: {exc}"
@@ -211,6 +276,13 @@ class RadioDataService:
         x = x * self._window
         spectrum = np.fft.fftshift(np.fft.fft(x))
         return 20.0 * np.log10(np.abs(spectrum) + 1e-12)
+
+    def _apply_hardware_settings(self, sample_rate_hz: float, center_freq_hz: float, gain: str | float) -> None:
+        if self._sdr is None:
+            return
+        self._sdr.sample_rate = sample_rate_hz
+        self._sdr.center_freq = center_freq_hz
+        self._sdr.gain = gain
 
     def _read_power_simulated(self, freqs: np.ndarray) -> np.ndarray:
         noise = np.random.normal(loc=-95.0, scale=2.0, size=FFT_SIZE)

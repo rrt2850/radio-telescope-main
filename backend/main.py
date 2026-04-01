@@ -38,6 +38,10 @@ class TrackRequest(PointRequest):
 class RadioConfigRequest(BaseModel):
     record_mode: Optional[str] = None
     observation_mode: Optional[str] = None
+    center_freq_hz: Optional[float] = None
+    bandwidth_hz: Optional[float] = None
+    gain: Optional[str] = None
+    n_ave: Optional[int] = None
 
 app = FastAPI(title="Radio Telescope Control API")
 
@@ -187,9 +191,13 @@ def radio_data():
 @app.post("/radio/config")
 def configure_radio(req: RadioConfigRequest):
     try:
-        radio_service.set_modes(
+        radio_service.set_config(
             record_mode=req.record_mode,
             observation_mode=req.observation_mode,
+            center_freq_hz=req.center_freq_hz,
+            bandwidth_hz=req.bandwidth_hz,
+            gain=req.gain,
+            n_ave=req.n_ave,
         )
     except ValueError as exc:
         return JSONResponse(status_code=400, content={"error": str(exc)})

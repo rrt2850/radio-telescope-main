@@ -11,6 +11,9 @@ type RadioPayload = {
         peak_freq_hz: number;
         peak_power_db: number;
         source: string;
+        bandwidth_hz: number;
+        gain: string | number;
+        n_ave: number;
         record_mode: 'instant' | 'average';
         observation_mode: 'spectrum' | 'hotcold';
         integration_count: number;
@@ -30,6 +33,10 @@ export const RadioViewer = () => {
     const [payload, setPayload] = useState<RadioPayload | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isSavingMode, setIsSavingMode] = useState(false);
+    const [centerFreqHzInput, setCenterFreqHzInput] = useState('');
+    const [bandwidthHzInput, setBandwidthHzInput] = useState('');
+    const [gainInput, setGainInput] = useState('');
+    const [nAveInput, setNAveInput] = useState('');
 
     useEffect(() => {
         let isMounted = true;
@@ -79,6 +86,16 @@ export const RadioViewer = () => {
             .join(' ');
     }, [payload]);
 
+    useEffect(() => {
+        if (!payload?.data) {
+            return;
+        }
+        setCenterFreqHzInput(String(payload.data.center_freq_hz));
+        setBandwidthHzInput(String(payload.data.bandwidth_hz));
+        setGainInput(String(payload.data.gain));
+        setNAveInput(String(payload.data.n_ave));
+    }, [payload]);
+
     if (isLoading) {
         return (
             <Box className='radio-viewer'>
@@ -114,6 +131,23 @@ export const RadioViewer = () => {
         }
     };
 
+    const updateSignalConfig = async () => {
+        setIsSavingMode(true);
+        try {
+            const response = await axios.post<RadioPayload>(`${RADIO_ENDPOINT}/config`, {
+                center_freq_hz: Number(centerFreqHzInput),
+                bandwidth_hz: Number(bandwidthHzInput),
+                gain: gainInput.trim() || 'auto',
+                n_ave: Number(nAveInput),
+            });
+            setPayload(response.data);
+        } catch (error) {
+            console.error('Failed to update radio signal config', error);
+        } finally {
+            setIsSavingMode(false);
+        }
+    };
+
     const captureCold = async () => {
         setIsSavingMode(true);
         try {
@@ -132,6 +166,9 @@ export const RadioViewer = () => {
             <Typography variant='body2'>Status: {payload.status}</Typography>
             <Typography variant='body2'>Source: {data.source}</Typography>
             <Typography variant='body2'>Center: {formatMhz(data.center_freq_hz)} MHz</Typography>
+            <Typography variant='body2'>Bandwidth: {formatMhz(data.bandwidth_hz)} MHz</Typography>
+            <Typography variant='body2'>Gain: {data.gain}</Typography>
+            <Typography variant='body2'>N_Ave: {data.n_ave}</Typography>
             <Typography variant='body2'>Peak: {formatMhz(data.peak_freq_hz)} MHz @ {data.peak_power_db.toFixed(2)} dB</Typography>
             <Typography variant='body2'>Integrated frames: {data.integration_count}</Typography>
 
@@ -160,6 +197,43 @@ export const RadioViewer = () => {
                 </TextField>
                 <Button variant='outlined' size='small' disabled={isSavingMode} onClick={captureCold}>
                     Save Cold Profile
+                </Button>
+            </Box>
+            <Box display='flex' gap={1} mt={1} mb={1} flexWrap='wrap'>
+                <TextField
+                    size='small'
+                    label='Center Freq (Hz)'
+                    value={centerFreqHzInput}
+                    disabled={isSavingMode}
+                    onChange={(e) => setCenterFreqHzInput(e.target.value)}
+                />
+                <TextField
+                    select
+                    size='small'
+                    label='Bandwidth (Hz)'
+                    value={bandwidthHzInput}
+                    disabled={isSavingMode}
+                    onChange={(e) => setBandwidthHzInput(e.target.value)}
+                >
+                    <MenuItem value='1024000'>1024000</MenuItem>
+                    <MenuItem value='2400000'>2400000</MenuItem>
+                </TextField>
+                <TextField
+                    size='small'
+                    label='Gain (auto or dB)'
+                    value={gainInput}
+                    disabled={isSavingMode}
+                    onChange={(e) => setGainInput(e.target.value)}
+                />
+                <TextField
+                    size='small'
+                    label='N_Ave'
+                    value={nAveInput}
+                    disabled={isSavingMode}
+                    onChange={(e) => setNAveInput(e.target.value)}
+                />
+                <Button variant='outlined' size='small' disabled={isSavingMode} onClick={updateSignalConfig}>
+                    Save Signal Config
                 </Button>
             </Box>
             {data.observation_mode === 'hotcold' && !hasColdProfile && (
