@@ -11,7 +11,12 @@ type PointPayload =
 
 type CoordField = 'ra' | 'dec' | 'az' | 'alt';
 
-export const MapController = () => {
+interface MapControllerProps {
+    isTrackMode: boolean;
+    onTrackModeChange: (enabled: boolean) => void;
+}
+
+export const MapController = ({ isTrackMode, onTrackModeChange }: MapControllerProps) => {
     const [ra, setRa] = useState('0');
     const [dec, setDec] = useState('0');
     const [az, setAz] = useState('0');
@@ -19,7 +24,6 @@ export const MapController = () => {
     const [coordMode, setCoordMode] = useState<'radec' | 'altaz'>('radec');
 
     const [duration, setDuration] = useState('60');
-    const [isTrackMode, setIsTrackMode] = useState(false);
 
     const isRaDecMode = coordMode === 'radec';
 
@@ -86,7 +90,7 @@ export const MapController = () => {
                 <ModeSwitches
                     isTrackMode={isTrackMode}
                     coordMode={coordMode}
-                    onToggleTrack={(checked) => setIsTrackMode(checked)}
+                    onToggleTrack={onTrackModeChange}
                     onToggleCoordMode={toggleCoordMode}
                 />
                 <CoordInputs

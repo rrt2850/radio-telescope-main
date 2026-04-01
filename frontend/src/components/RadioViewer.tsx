@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import { Box, Button, CircularProgress, MenuItem, TextField, Typography } from '@mui/material';
 
@@ -25,11 +25,36 @@ type RadioPayload = {
     } | null;
 };
 
+type ScanPixel = {
+    x: number;
+    y: number;
+    value: number;
+};
+
 const RADIO_ENDPOINT = 'https://spex-telescope-backend.online/radio';
+const GRID_SIZE = 24;
+const IDLE_BAR_COUNT = 48;
 
 const formatMhz = (valueHz: number) => (valueHz / 1_000_000).toFixed(6);
 
-export const RadioViewer = () => {
+const normalizeDb = (value: number, min = -120, max = -10) => {
+    const clamped = Math.max(min, Math.min(max, value));
+    return (clamped - min) / (max - min);
+};
+
+const buildInitialMap = () => Array.from({ length: GRID_SIZE }, () => Array.from({ length: GRID_SIZE }, () => 0));
+
+const valueToColor = (value: number) => {
+    const hue = 240 - value * 240;
+    const lightness = 26 + value * 48;
+    return `hsl(${hue} 85% ${lightness}%)`;
+};
+
+interface RadioViewerProps {
+    isTrackMode: boolean;
+}
+
+export const RadioViewer = ({ isTrackMode }: RadioViewerProps) => {
     const [payload, setPayload] = useState<RadioPayload | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isSavingMode, setIsSavingMode] = useState(false);
@@ -37,6 +62,10 @@ export const RadioViewer = () => {
     const [bandwidthHzInput, setBandwidthHzInput] = useState('');
     const [gainInput, setGainInput] = useState('');
     const [nAveInput, setNAveInput] = useState('');
+    const [isScanEnabled, setIsScanEnabled] = useState(false);
+    const [scanMap, setScanMap] = useState<number[][]>(() => buildInitialMap());
+    const [currentPixel, setCurrentPixel] = useState<ScanPixel | null>(null);
+    const cursorRef = useRef({ x: 0, y: 0, direction: 1 });
 
     useEffect(() => {
         let isMounted = true;
@@ -66,25 +95,56 @@ export const RadioViewer = () => {
         };
     }, []);
 
+    useEffect(() => {
+        if (isTrackMode) {
+            setIsScanEnabled(true);
+        }
+    }, [isTrackMode]);
+
+    const spectrumValues = useMemo(() => {
+        return payload?.data?.calibrated_power_db ?? payload?.data?.averaged_power_db ?? payload?.data?.power_db ?? [];
+    }, [payload]);
+
     const points = useMemo(() => {
-        const values = payload?.data?.calibrated_power_db ?? payload?.data?.averaged_power_db ?? payload?.data?.power_db;
-        if (!values || values.length === 0) {
+        if (spectrumValues.length === 0) {
             return '';
         }
 
-        const min = Math.min(...values);
-        const max = Math.max(...values);
+        const min = Math.min(...spectrumValues);
+        const max = Math.max(...spectrumValues);
         const span = max - min || 1;
 
-        return values
+        return spectrumValues
             .map((value, index) => {
-                const x = (index / (values.length - 1)) * 100;
+                const x = (index / (spectrumValues.length - 1)) * 100;
                 const normalizedY = (value - min) / span;
                 const y = 100 - normalizedY * 100;
                 return `${x},${y}`;
             })
             .join(' ');
-    }, [payload]);
+    }, [spectrumValues]);
+
+    const idlePreviewBars = useMemo(() => {
+        if (spectrumValues.length === 0) {
+            return [];
+        }
+
+        const stride = Math.max(1, Math.floor(spectrumValues.length / IDLE_BAR_COUNT));
+        const sampled: number[] = [];
+
+        for (let index = 0; index < spectrumValues.length && sampled.length < IDLE_BAR_COUNT; index += stride) {
+            sampled.push(spectrumValues[index]);
+        }
+
+        const min = Math.min(...sampled);
+        const max = Math.max(...sampled);
+        const span = max - min || 1;
+
+        return sampled.map((value) => {
+            const normalized = (value - min) / span;
+            return Math.max(0.05, normalized);
+        });
+    }, [spectrumValues]);
 
     useEffect(() => {
         if (!payload?.data) {
@@ -95,6 +155,32 @@ export const RadioViewer = () => {
         setGainInput(String(payload.data.gain));
         setNAveInput(String(payload.data.n_ave));
     }, [payload]);
+
+    useEffect(() => {
+        if (!isScanEnabled || !payload?.data) {
+            return;
+        }
+
+        const value = normalizeDb(payload.data.peak_power_db);
+        const { x, y } = cursorRef.current;
+
+        setScanMap((previousMap) => {
+            const nextMap = previousMap.map((row) => [...row]);
+            nextMap[y][x] = value;
+            return nextMap;
+        });
+        setCurrentPixel({ x, y, value });
+
+        const cursor = cursorRef.current;
+        const nextX = cursor.x + cursor.direction;
+
+        if (nextX >= GRID_SIZE || nextX < 0) {
+            cursor.y = (cursor.y + 1) % GRID_SIZE;
+            cursor.direction *= -1;
+        } else {
+            cursor.x = nextX;
+        }
+    }, [payload, isScanEnabled]);
 
     if (isLoading) {
         return (
@@ -118,6 +204,7 @@ export const RadioViewer = () => {
 
     const { data } = payload;
     const hasColdProfile = Boolean(data.cold_profile_db);
+    const peakStrength = normalizeDb(data.peak_power_db);
 
     const updateMode = async (modePatch: { record_mode?: 'instant' | 'average'; observation_mode?: 'spectrum' | 'hotcold' }) => {
         setIsSavingMode(true);
@@ -158,6 +245,12 @@ export const RadioViewer = () => {
         } finally {
             setIsSavingMode(false);
         }
+    };
+
+    const resetScan = () => {
+        setScanMap(buildInitialMap());
+        setCurrentPixel(null);
+        cursorRef.current = { x: 0, y: 0, direction: 1 };
     };
 
     return (
@@ -245,6 +338,76 @@ export const RadioViewer = () => {
             <svg viewBox='0 0 100 100' preserveAspectRatio='none' className='radio-chart'>
                 <polyline fill='none' stroke='currentColor' strokeWidth='1.4' points={points} />
             </svg>
+
+            <Box className='hydrogen-map-panel'>
+                <Box display='flex' alignItems='center' justifyContent='space-between' mb={1}>
+                    <Typography variant='subtitle2'>Hydrogen Scan Map (prototype)</Typography>
+                    <Box display='flex' gap={1}>
+                        <Button size='small' variant='outlined' onClick={() => setIsScanEnabled((current) => !current)}>
+                            {isScanEnabled ? 'Pause scan' : 'Resume scan'}
+                        </Button>
+                        <Button size='small' variant='outlined' onClick={resetScan}>
+                            Reset
+                        </Button>
+                    </Box>
+                </Box>
+
+                {isTrackMode && currentPixel ? (
+                    <Typography variant='caption' display='block' mb={1}>
+                        Current pixel x={currentPixel.x}, y={currentPixel.y}, normalized HI={currentPixel.value.toFixed(3)}
+                    </Typography>
+                ) : (
+                    <Typography variant='caption' display='block' mb={1}>
+                        Track mode off: showing a live preview generated from the latest radio spectrum.
+                    </Typography>
+                )}
+
+                {isTrackMode ? (
+                    <Box className='hydrogen-grid' role='img' aria-label='Hydrogen density map'>
+                        {scanMap.map((row, y) =>
+                            row.map((value, x) => {
+                                const isCurrent = currentPixel?.x === x && currentPixel?.y === y;
+                                return (
+                                    <Box
+                                        key={`${x}-${y}`}
+                                        className={`hydrogen-cell ${isCurrent ? 'is-current' : ''}`}
+                                        style={{ backgroundColor: valueToColor(value) }}
+                                    />
+                                );
+                            })
+                        )}
+                    </Box>
+                ) : (
+                    <Box
+                        className='hydrogen-art'
+                        role='img'
+                        aria-label='Live idle preview derived from radio spectrum'
+                        style={{
+                            background: `
+                                radial-gradient(circle at 20% 20%, hsl(${220 - peakStrength * 80} 85% 66% / 0.75), transparent 36%),
+                                radial-gradient(circle at 72% 60%, hsl(${292 - peakStrength * 65} 90% 62% / 0.68), transparent 42%),
+                                linear-gradient(180deg, #081024 0%, #17244c 52%, #2d1338 100%)
+                            `,
+                        }}
+                    >
+                        <Box className='idle-spectrum-bars'>
+                            {idlePreviewBars.map((barHeight, index) => (
+                                <Box
+                                    key={`idle-bar-${index}`}
+                                    className='idle-spectrum-bar'
+                                    style={{
+                                        height: `${Math.round(20 + barHeight * 80)}%`,
+                                        opacity: 0.25 + barHeight * 0.75,
+                                    }}
+                                />
+                            ))}
+                        </Box>
+                        <Typography variant='caption' className='idle-preview-label'>
+                            Live peak {formatMhz(data.peak_freq_hz)} MHz · {data.peak_power_db.toFixed(2)} dB
+                        </Typography>
+                    </Box>
+                )}
+            </Box>
 
             <Typography variant='caption' display='block'>
                 Last update: {new Date(data.timestamp * 1000).toLocaleTimeString()}

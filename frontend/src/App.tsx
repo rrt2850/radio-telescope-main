@@ -12,6 +12,7 @@ function App() {
 		}
 		return window.matchMedia("(prefers-color-scheme: dark)").matches;
 	});
+	const [isTrackMode, setIsTrackMode] = useState(false);
 
 	// Keep CSS variables in sync
 	useEffect(() => {
@@ -44,8 +45,8 @@ function App() {
 				</button>
 
 				<div className="app-content">
-					<MapController />
-					<RadioViewer />
+					<MapController isTrackMode={isTrackMode} onTrackModeChange={setIsTrackMode} />
+					<RadioViewer isTrackMode={isTrackMode} />
 				</div>
 			</div>
 		</ThemeProvider>
