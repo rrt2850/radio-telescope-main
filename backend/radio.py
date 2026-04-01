@@ -21,7 +21,6 @@ import signal
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
-from rtlsdr import RtlSdr
 
 
 # Hydrogen line center frequency in Hz
@@ -29,12 +28,16 @@ HYDROGEN_LINE_HZ = 1420.40575177e6
 
 # RTL-SDR tuning
 CENTER_FREQ_HZ = HYDROGEN_LINE_HZ
-SAMPLE_RATE_HZ = 2.4e6
+SAMPLE_RATE_HZ = 1.024e6
 GAIN = "auto"              # "auto" or a float like 35.7
+
+# Some R820T/R828D dongles on Raspberry Pi intermittently print
+# "PLL not locked!" when running at 2.4 Msps. 1.024 Msps is usually stable
+# and still provides enough bandwidth for hydrogen-line observation.
 
 # FFT / plotting
 FFT_SIZE = 16384
-READ_SIZE = 262144
+READ_SIZE = 131072
 UPDATE_INTERVAL_MS = 250
 PLOT_TITLE = "RTL-SDR Hydrogen Line Live Spectrum"
 
@@ -46,6 +49,42 @@ USE_WINDOW = True
 # Optional fixed Y-axis range. Set to None for auto scaling.
 Y_MIN_DB = None
 Y_MAX_DB = None
+
+
+def _rtl_import_help(import_error: Exception) -> str:
+    err_text = str(import_error)
+    guidance = [
+        "Failed to import RTL-SDR bindings (pyrtlsdr + librtlsdr).",
+        f"Original error: {err_text}",
+        "",
+    ]
+
+    if "undefined symbol: rtlsdr_set_dithering" in err_text:
+        guidance.extend(
+            [
+                "This usually means pyrtlsdr is newer than the installed librtlsdr shared library.",
+                "Fix options:",
+                "  1) Update librtlsdr and make sure Python loads the same library as rtl_test.",
+                "     sudo apt update && sudo apt install --reinstall rtl-sdr librtlsdr-dev",
+                "  2) If /usr/local/lib/.../librtlsdr.so exists, it may shadow apt's version.",
+                "     Prefer one installation source and remove stale copies.",
+                "  3) As a fallback, pin pyrtlsdr to a version compatible with your installed librtlsdr:",
+                "     python3 -m pip install 'pyrtlsdr<0.4'",
+                "",
+                "After changing libraries, rerun radio.py.",
+            ]
+        )
+    else:
+        guidance.extend(
+            [
+                "Try reinstalling the SDR packages:",
+                "  sudo apt update && sudo apt install --reinstall rtl-sdr librtlsdr-dev",
+                "  python3 -m pip install --upgrade --force-reinstall pyrtlsdr",
+            ]
+        )
+
+    return "\n".join(guidance)
+
 
 def resolveGain(gain_value):
     if isinstance(gain_value, str) and gain_value.lower() == "auto":
@@ -64,6 +103,12 @@ def main():
         raise ValueError("CENTER_FREQ_HZ must be > 0")
     if not (0.0 < SMOOTHING_ALPHA <= 1.0):
         raise ValueError("SMOOTHING_ALPHA must be in (0, 1]")
+
+    try:
+        from rtlsdr import RtlSdr
+    except Exception as import_error:
+        print(_rtl_import_help(import_error), file=sys.stderr)
+        return 1
 
     sdr = RtlSdr()
     sdr.sample_rate = SAMPLE_RATE_HZ
@@ -151,9 +196,11 @@ def main():
         except Exception:
             pass
 
+    return 0
+
 
 if __name__ == "__main__":
     try:
-        main()
+        raise SystemExit(main())
     except KeyboardInterrupt:
         sys.exit(0)
