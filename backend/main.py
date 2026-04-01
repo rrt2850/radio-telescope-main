@@ -35,6 +35,10 @@ class TrackRequest(PointRequest):
     # total tracking time in seconds
     duration: int
 
+class RadioConfigRequest(BaseModel):
+    record_mode: Optional[str] = None
+    observation_mode: Optional[str] = None
+
 app = FastAPI(title="Radio Telescope Control API")
 
 app.add_middleware(
@@ -177,4 +181,28 @@ def track(req: TrackRequest, backgroundTasks: BackgroundTasks):
 
 @app.get("/radio")
 def radio_data():
+    return radio_service.get_payload()
+
+
+@app.post("/radio/config")
+def configure_radio(req: RadioConfigRequest):
+    try:
+        radio_service.set_modes(
+            record_mode=req.record_mode,
+            observation_mode=req.observation_mode,
+        )
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={"error": str(exc)})
+
+    return radio_service.get_payload()
+
+
+@app.post("/radio/capture-cold")
+def capture_radio_cold_profile():
+    success = radio_service.capture_cold_profile()
+    if not success:
+        return JSONResponse(
+            status_code=409,
+            content={"error": "No radio snapshot available yet; try again shortly."},
+        )
     return radio_service.get_payload()

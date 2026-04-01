@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
-import { Box, CircularProgress, Typography } from '@mui/material';
+import { Box, Button, CircularProgress, MenuItem, TextField, Typography } from '@mui/material';
 
 type RadioPayload = {
     status: string;
@@ -11,8 +11,14 @@ type RadioPayload = {
         peak_freq_hz: number;
         peak_power_db: number;
         source: string;
+        record_mode: 'instant' | 'average';
+        observation_mode: 'spectrum' | 'hotcold';
+        integration_count: number;
         bins_hz: number[];
         power_db: number[];
+        averaged_power_db: number[];
+        calibrated_power_db: number[] | null;
+        cold_profile_db: number[] | null;
     } | null;
 };
 
@@ -23,6 +29,7 @@ const formatMhz = (valueHz: number) => (valueHz / 1_000_000).toFixed(6);
 export const RadioViewer = () => {
     const [payload, setPayload] = useState<RadioPayload | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [isSavingMode, setIsSavingMode] = useState(false);
 
     useEffect(() => {
         let isMounted = true;
@@ -53,7 +60,7 @@ export const RadioViewer = () => {
     }, []);
 
     const points = useMemo(() => {
-        const values = payload?.data?.power_db;
+        const values = payload?.data?.calibrated_power_db ?? payload?.data?.averaged_power_db ?? payload?.data?.power_db;
         if (!values || values.length === 0) {
             return '';
         }
@@ -93,6 +100,31 @@ export const RadioViewer = () => {
     }
 
     const { data } = payload;
+    const hasColdProfile = Boolean(data.cold_profile_db);
+
+    const updateMode = async (modePatch: { record_mode?: 'instant' | 'average'; observation_mode?: 'spectrum' | 'hotcold' }) => {
+        setIsSavingMode(true);
+        try {
+            const response = await axios.post<RadioPayload>(`${RADIO_ENDPOINT}/config`, modePatch);
+            setPayload(response.data);
+        } catch (error) {
+            console.error('Failed to update radio mode', error);
+        } finally {
+            setIsSavingMode(false);
+        }
+    };
+
+    const captureCold = async () => {
+        setIsSavingMode(true);
+        try {
+            const response = await axios.post<RadioPayload>(`${RADIO_ENDPOINT}/capture-cold`);
+            setPayload(response.data);
+        } catch (error) {
+            console.error('Failed to capture cold profile', error);
+        } finally {
+            setIsSavingMode(false);
+        }
+    };
 
     return (
         <Box className='radio-viewer'>
@@ -101,6 +133,40 @@ export const RadioViewer = () => {
             <Typography variant='body2'>Source: {data.source}</Typography>
             <Typography variant='body2'>Center: {formatMhz(data.center_freq_hz)} MHz</Typography>
             <Typography variant='body2'>Peak: {formatMhz(data.peak_freq_hz)} MHz @ {data.peak_power_db.toFixed(2)} dB</Typography>
+            <Typography variant='body2'>Integrated frames: {data.integration_count}</Typography>
+
+            <Box display='flex' gap={1} mt={1} mb={1} flexWrap='wrap'>
+                <TextField
+                    select
+                    size='small'
+                    label='Record'
+                    value={data.record_mode}
+                    disabled={isSavingMode}
+                    onChange={(e) => updateMode({ record_mode: e.target.value as 'instant' | 'average' })}
+                >
+                    <MenuItem value='average'>Average</MenuItem>
+                    <MenuItem value='instant'>Instant</MenuItem>
+                </TextField>
+                <TextField
+                    select
+                    size='small'
+                    label='Observation'
+                    value={data.observation_mode}
+                    disabled={isSavingMode}
+                    onChange={(e) => updateMode({ observation_mode: e.target.value as 'spectrum' | 'hotcold' })}
+                >
+                    <MenuItem value='spectrum'>Spectrum</MenuItem>
+                    <MenuItem value='hotcold'>Hot/Cold</MenuItem>
+                </TextField>
+                <Button variant='outlined' size='small' disabled={isSavingMode} onClick={captureCold}>
+                    Save Cold Profile
+                </Button>
+            </Box>
+            {data.observation_mode === 'hotcold' && !hasColdProfile && (
+                <Typography variant='caption' display='block'>
+                    No cold profile saved yet; click "Save Cold Profile" while pointed at cold sky.
+                </Typography>
+            )}
 
             <svg viewBox='0 0 100 100' preserveAspectRatio='none' className='radio-chart'>
                 <polyline fill='none' stroke='currentColor' strokeWidth='1.4' points={points} />

@@ -20,8 +20,14 @@ class RadioSnapshot:
     peak_freq_hz: float
     peak_power_db: float
     source: str
+    record_mode: str
+    observation_mode: str
+    integration_count: int
     bins_hz: list[float]
     power_db: list[float]
+    averaged_power_db: list[float]
+    calibrated_power_db: Optional[list[float]]
+    cold_profile_db: Optional[list[float]]
 
 
 class RadioDataService:
@@ -36,6 +42,11 @@ class RadioDataService:
         self._error: Optional[str] = None
         self._sdr = None
         self._window = np.hanning(FFT_SIZE)
+        self._record_mode = "average"  # "instant" | "average"
+        self._observation_mode = "spectrum"  # "spectrum" | "hotcold"
+        self._integration_sum: Optional[np.ndarray] = None
+        self._integration_count = 0
+        self._cold_profile: Optional[np.ndarray] = None
 
     def start(self):
         if self._thread and self._thread.is_alive():
@@ -74,10 +85,37 @@ class RadioDataService:
                 "peak_freq_hz": snapshot.peak_freq_hz,
                 "peak_power_db": snapshot.peak_power_db,
                 "source": snapshot.source,
+                "record_mode": snapshot.record_mode,
+                "observation_mode": snapshot.observation_mode,
+                "integration_count": snapshot.integration_count,
                 "bins_hz": snapshot.bins_hz,
                 "power_db": snapshot.power_db,
+                "averaged_power_db": snapshot.averaged_power_db,
+                "calibrated_power_db": snapshot.calibrated_power_db,
+                "cold_profile_db": snapshot.cold_profile_db,
             },
         }
+
+    def set_modes(self, record_mode: Optional[str] = None, observation_mode: Optional[str] = None) -> None:
+        with self._lock:
+            if record_mode is not None:
+                if record_mode not in ("instant", "average"):
+                    raise ValueError("record_mode must be 'instant' or 'average'")
+                self._record_mode = record_mode
+                if record_mode == "instant":
+                    self._integration_sum = None
+                    self._integration_count = 0
+            if observation_mode is not None:
+                if observation_mode not in ("spectrum", "hotcold"):
+                    raise ValueError("observation_mode must be 'spectrum' or 'hotcold'")
+                self._observation_mode = observation_mode
+
+    def capture_cold_profile(self) -> bool:
+        with self._lock:
+            if self._snapshot is None:
+                return False
+            self._cold_profile = np.array(self._snapshot.averaged_power_db, dtype=float)
+            return True
 
     def _run(self):
         freqs = np.fft.fftshift(np.fft.fftfreq(FFT_SIZE, d=1.0 / SAMPLE_RATE_HZ)) + CENTER_FREQ_HZ
@@ -89,16 +127,45 @@ class RadioDataService:
         while not self._stop_event.is_set():
             try:
                 power_db = self._read_power_simulated(freqs) if use_simulated else self._read_power_hardware()
-                peak_idx = int(np.argmax(power_db))
+                with self._lock:
+                    record_mode = self._record_mode
+                    observation_mode = self._observation_mode
+
+                if record_mode == "average":
+                    if self._integration_sum is None:
+                        self._integration_sum = np.zeros_like(power_db)
+                        self._integration_count = 0
+                    self._integration_sum += power_db
+                    self._integration_count += 1
+                    averaged_power = self._integration_sum / max(1, self._integration_count)
+                else:
+                    averaged_power = power_db
+                    self._integration_sum = None
+                    self._integration_count = 1
+
+                calibrated = None
+                if observation_mode == "hotcold" and self._cold_profile is not None:
+                    calibrated = averaged_power - self._cold_profile
+                    peak_source = calibrated
+                else:
+                    peak_source = averaged_power
+
+                peak_idx = int(np.argmax(peak_source))
 
                 snapshot = RadioSnapshot(
                     timestamp=time.time(),
                     center_freq_hz=CENTER_FREQ_HZ,
                     peak_freq_hz=float(freqs[peak_idx]),
-                    peak_power_db=float(power_db[peak_idx]),
+                    peak_power_db=float(peak_source[peak_idx]),
                     source="simulation" if use_simulated else "rtl-sdr",
+                    record_mode=record_mode,
+                    observation_mode=observation_mode,
+                    integration_count=int(self._integration_count),
                     bins_hz=freqs.astype(float).tolist(),
                     power_db=power_db.astype(float).tolist(),
+                    averaged_power_db=averaged_power.astype(float).tolist(),
+                    calibrated_power_db=calibrated.astype(float).tolist() if calibrated is not None else None,
+                    cold_profile_db=self._cold_profile.astype(float).tolist() if self._cold_profile is not None else None,
                 )
 
                 with self._lock:
