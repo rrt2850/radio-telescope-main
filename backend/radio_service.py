@@ -1,7 +1,7 @@
 import threading
 import time
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Union
 
 import numpy as np
 
@@ -28,7 +28,7 @@ class RadioSnapshot:
     peak_power_db: float
     source: str
     bandwidth_hz: float
-    gain: str | float
+    gain: Union[str, float]
     n_ave: int
     record_mode: str
     observation_mode: str
@@ -54,7 +54,7 @@ class RadioDataService:
         self._window = np.hanning(FFT_SIZE)
         self._center_freq_hz = CENTER_FREQ_HZ
         self._sample_rate_hz = SAMPLE_RATE_HZ
-        self._gain: str | float = "auto"
+        self._gain: Union[str, float] = "auto"
         self._n_ave = 32
         self._record_mode = "average"  # "instant" | "average"
         self._observation_mode = "spectrum"  # "spectrum" | "hotcold"
@@ -277,7 +277,12 @@ class RadioDataService:
         spectrum = np.fft.fftshift(np.fft.fft(x))
         return 20.0 * np.log10(np.abs(spectrum) + 1e-12)
 
-    def _apply_hardware_settings(self, sample_rate_hz: float, center_freq_hz: float, gain: str | float) -> None:
+    def _apply_hardware_settings(
+        self,
+        sample_rate_hz: float,
+        center_freq_hz: float,
+        gain: Union[str, float],
+    ) -> None:
         if self._sdr is None:
             return
         self._sdr.sample_rate = sample_rate_hz
