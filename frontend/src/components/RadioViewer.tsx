@@ -37,6 +37,19 @@ export const RadioViewer = () => {
     const [bandwidthHzInput, setBandwidthHzInput] = useState('');
     const [gainInput, setGainInput] = useState('');
     const [nAveInput, setNAveInput] = useState('');
+    const [activeInput, setActiveInput] = useState<null | 'center_freq_hz' | 'bandwidth_hz' | 'gain' | 'n_ave'>(null);
+    const [dirtyInputs, setDirtyInputs] = useState({
+        center_freq_hz: false,
+        bandwidth_hz: false,
+        gain: false,
+        n_ave: false,
+    });
+    const [pendingSignalConfig, setPendingSignalConfig] = useState<null | {
+        center_freq_hz: number;
+        bandwidth_hz: number;
+        gain: string;
+        n_ave: number;
+    }>(null);
     useEffect(() => {
         let isMounted = true;
 
@@ -89,11 +102,31 @@ export const RadioViewer = () => {
         if (!payload?.data) {
             return;
         }
-        setCenterFreqHzInput(String(payload.data.center_freq_hz));
-        setBandwidthHzInput(String(payload.data.bandwidth_hz));
-        setGainInput(String(payload.data.gain));
-        setNAveInput(String(payload.data.n_ave));
-    }, [payload]);
+
+        const payloadMatchesPendingConfig =
+            pendingSignalConfig !== null &&
+            payload.data.center_freq_hz === pendingSignalConfig.center_freq_hz &&
+            payload.data.bandwidth_hz === pendingSignalConfig.bandwidth_hz &&
+            String(payload.data.gain) === pendingSignalConfig.gain &&
+            payload.data.n_ave === pendingSignalConfig.n_ave;
+
+        if (payloadMatchesPendingConfig) {
+            setPendingSignalConfig(null);
+        }
+
+        if (activeInput !== 'center_freq_hz' && !dirtyInputs.center_freq_hz && !pendingSignalConfig) {
+            setCenterFreqHzInput(String(payload.data.center_freq_hz));
+        }
+        if (activeInput !== 'bandwidth_hz' && !dirtyInputs.bandwidth_hz && !pendingSignalConfig) {
+            setBandwidthHzInput(String(payload.data.bandwidth_hz));
+        }
+        if (activeInput !== 'gain' && !dirtyInputs.gain && !pendingSignalConfig) {
+            setGainInput(String(payload.data.gain));
+        }
+        if (activeInput !== 'n_ave' && !dirtyInputs.n_ave && !pendingSignalConfig) {
+            setNAveInput(String(payload.data.n_ave));
+        }
+    }, [payload, activeInput, dirtyInputs, pendingSignalConfig]);
 
     if (isLoading) {
         return (
@@ -131,16 +164,26 @@ export const RadioViewer = () => {
     };
 
     const updateSignalConfig = async () => {
+        const submittedConfig = {
+            center_freq_hz: Number(centerFreqHzInput),
+            bandwidth_hz: Number(bandwidthHzInput),
+            gain: gainInput.trim() || 'auto',
+            n_ave: Number(nAveInput),
+        };
+
+        setDirtyInputs({
+            center_freq_hz: false,
+            bandwidth_hz: false,
+            gain: false,
+            n_ave: false,
+        });
+        setPendingSignalConfig(submittedConfig);
         setIsSavingMode(true);
         try {
-            const response = await axios.post<RadioPayload>(`${RADIO_ENDPOINT}/config`, {
-                center_freq_hz: Number(centerFreqHzInput),
-                bandwidth_hz: Number(bandwidthHzInput),
-                gain: gainInput.trim() || 'auto',
-                n_ave: Number(nAveInput),
-            });
+            const response = await axios.post<RadioPayload>(`${RADIO_ENDPOINT}/config`, submittedConfig);
             setPayload(response.data);
         } catch (error) {
+            setPendingSignalConfig(null);
             console.error('Failed to update radio signal config', error);
         } finally {
             setIsSavingMode(false);
@@ -204,7 +247,12 @@ export const RadioViewer = () => {
                     label='Center Freq (Hz)'
                     value={centerFreqHzInput}
                     disabled={isSavingMode}
-                    onChange={(e) => setCenterFreqHzInput(e.target.value)}
+                    onChange={(e) => {
+                        setCenterFreqHzInput(e.target.value);
+                        setDirtyInputs((prev) => ({ ...prev, center_freq_hz: true }));
+                    }}
+                    onFocus={() => setActiveInput('center_freq_hz')}
+                    onBlur={() => setActiveInput(null)}
                 />
                 <TextField
                     select
@@ -212,7 +260,12 @@ export const RadioViewer = () => {
                     label='Bandwidth (Hz)'
                     value={bandwidthHzInput}
                     disabled={isSavingMode}
-                    onChange={(e) => setBandwidthHzInput(e.target.value)}
+                    onChange={(e) => {
+                        setBandwidthHzInput(e.target.value);
+                        setDirtyInputs((prev) => ({ ...prev, bandwidth_hz: true }));
+                    }}
+                    onFocus={() => setActiveInput('bandwidth_hz')}
+                    onBlur={() => setActiveInput(null)}
                 >
                     <MenuItem value='1024000'>1024000</MenuItem>
                     <MenuItem value='2400000'>2400000</MenuItem>
@@ -222,14 +275,24 @@ export const RadioViewer = () => {
                     label='Gain (auto or dB)'
                     value={gainInput}
                     disabled={isSavingMode}
-                    onChange={(e) => setGainInput(e.target.value)}
+                    onChange={(e) => {
+                        setGainInput(e.target.value);
+                        setDirtyInputs((prev) => ({ ...prev, gain: true }));
+                    }}
+                    onFocus={() => setActiveInput('gain')}
+                    onBlur={() => setActiveInput(null)}
                 />
                 <TextField
                     size='small'
                     label='N_Ave'
                     value={nAveInput}
                     disabled={isSavingMode}
-                    onChange={(e) => setNAveInput(e.target.value)}
+                    onChange={(e) => {
+                        setNAveInput(e.target.value);
+                        setDirtyInputs((prev) => ({ ...prev, n_ave: true }));
+                    }}
+                    onFocus={() => setActiveInput('n_ave')}
+                    onBlur={() => setActiveInput(null)}
                 />
                 <Button variant='outlined' size='small' disabled={isSavingMode} onClick={updateSignalConfig}>
                     Save Signal Config
