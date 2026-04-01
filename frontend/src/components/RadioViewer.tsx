@@ -37,6 +37,7 @@ export const RadioViewer = () => {
     const [bandwidthHzInput, setBandwidthHzInput] = useState('');
     const [gainInput, setGainInput] = useState('');
     const [nAveInput, setNAveInput] = useState('');
+    const [activeInput, setActiveInput] = useState<null | 'center_freq_hz' | 'bandwidth_hz' | 'gain' | 'n_ave'>(null);
     useEffect(() => {
         let isMounted = true;
 
@@ -89,11 +90,19 @@ export const RadioViewer = () => {
         if (!payload?.data) {
             return;
         }
-        setCenterFreqHzInput(String(payload.data.center_freq_hz));
-        setBandwidthHzInput(String(payload.data.bandwidth_hz));
-        setGainInput(String(payload.data.gain));
-        setNAveInput(String(payload.data.n_ave));
-    }, [payload]);
+        if (activeInput !== 'center_freq_hz') {
+            setCenterFreqHzInput(String(payload.data.center_freq_hz));
+        }
+        if (activeInput !== 'bandwidth_hz') {
+            setBandwidthHzInput(String(payload.data.bandwidth_hz));
+        }
+        if (activeInput !== 'gain') {
+            setGainInput(String(payload.data.gain));
+        }
+        if (activeInput !== 'n_ave') {
+            setNAveInput(String(payload.data.n_ave));
+        }
+    }, [payload, activeInput]);
 
     if (isLoading) {
         return (
@@ -205,6 +214,8 @@ export const RadioViewer = () => {
                     value={centerFreqHzInput}
                     disabled={isSavingMode}
                     onChange={(e) => setCenterFreqHzInput(e.target.value)}
+                    onFocus={() => setActiveInput('center_freq_hz')}
+                    onBlur={() => setActiveInput(null)}
                 />
                 <TextField
                     select
@@ -213,6 +224,8 @@ export const RadioViewer = () => {
                     value={bandwidthHzInput}
                     disabled={isSavingMode}
                     onChange={(e) => setBandwidthHzInput(e.target.value)}
+                    onFocus={() => setActiveInput('bandwidth_hz')}
+                    onBlur={() => setActiveInput(null)}
                 >
                     <MenuItem value='1024000'>1024000</MenuItem>
                     <MenuItem value='2400000'>2400000</MenuItem>
@@ -223,6 +236,8 @@ export const RadioViewer = () => {
                     value={gainInput}
                     disabled={isSavingMode}
                     onChange={(e) => setGainInput(e.target.value)}
+                    onFocus={() => setActiveInput('gain')}
+                    onBlur={() => setActiveInput(null)}
                 />
                 <TextField
                     size='small'
@@ -230,6 +245,8 @@ export const RadioViewer = () => {
                     value={nAveInput}
                     disabled={isSavingMode}
                     onChange={(e) => setNAveInput(e.target.value)}
+                    onFocus={() => setActiveInput('n_ave')}
+                    onBlur={() => setActiveInput(null)}
                 />
                 <Button variant='outlined' size='small' disabled={isSavingMode} onClick={updateSignalConfig}>
                     Save Signal Config
