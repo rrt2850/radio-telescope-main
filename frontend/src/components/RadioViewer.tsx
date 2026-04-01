@@ -38,18 +38,6 @@ export const RadioViewer = () => {
     const [gainInput, setGainInput] = useState('');
     const [nAveInput, setNAveInput] = useState('');
     const [activeInput, setActiveInput] = useState<null | 'center_freq_hz' | 'bandwidth_hz' | 'gain' | 'n_ave'>(null);
-    const [dirtyInputs, setDirtyInputs] = useState({
-        center_freq_hz: false,
-        bandwidth_hz: false,
-        gain: false,
-        n_ave: false,
-    });
-    const [pendingSignalConfig, setPendingSignalConfig] = useState<null | {
-        center_freq_hz: number;
-        bandwidth_hz: number;
-        gain: string;
-        n_ave: number;
-    }>(null);
     useEffect(() => {
         let isMounted = true;
 
@@ -102,31 +90,19 @@ export const RadioViewer = () => {
         if (!payload?.data) {
             return;
         }
-
-        const payloadMatchesPendingConfig =
-            pendingSignalConfig !== null &&
-            payload.data.center_freq_hz === pendingSignalConfig.center_freq_hz &&
-            payload.data.bandwidth_hz === pendingSignalConfig.bandwidth_hz &&
-            String(payload.data.gain) === pendingSignalConfig.gain &&
-            payload.data.n_ave === pendingSignalConfig.n_ave;
-
-        if (payloadMatchesPendingConfig) {
-            setPendingSignalConfig(null);
-        }
-
-        if (activeInput !== 'center_freq_hz' && !dirtyInputs.center_freq_hz && !pendingSignalConfig) {
+        if (activeInput !== 'center_freq_hz') {
             setCenterFreqHzInput(String(payload.data.center_freq_hz));
         }
-        if (activeInput !== 'bandwidth_hz' && !dirtyInputs.bandwidth_hz && !pendingSignalConfig) {
+        if (activeInput !== 'bandwidth_hz') {
             setBandwidthHzInput(String(payload.data.bandwidth_hz));
         }
-        if (activeInput !== 'gain' && !dirtyInputs.gain && !pendingSignalConfig) {
+        if (activeInput !== 'gain') {
             setGainInput(String(payload.data.gain));
         }
-        if (activeInput !== 'n_ave' && !dirtyInputs.n_ave && !pendingSignalConfig) {
+        if (activeInput !== 'n_ave') {
             setNAveInput(String(payload.data.n_ave));
         }
-    }, [payload, activeInput, dirtyInputs, pendingSignalConfig]);
+    }, [payload, activeInput]);
 
     if (isLoading) {
         return (
@@ -247,10 +223,7 @@ export const RadioViewer = () => {
                     label='Center Freq (Hz)'
                     value={centerFreqHzInput}
                     disabled={isSavingMode}
-                    onChange={(e) => {
-                        setCenterFreqHzInput(e.target.value);
-                        setDirtyInputs((prev) => ({ ...prev, center_freq_hz: true }));
-                    }}
+                    onChange={(e) => setCenterFreqHzInput(e.target.value)}
                     onFocus={() => setActiveInput('center_freq_hz')}
                     onBlur={() => setActiveInput(null)}
                 />
@@ -260,10 +233,7 @@ export const RadioViewer = () => {
                     label='Bandwidth (Hz)'
                     value={bandwidthHzInput}
                     disabled={isSavingMode}
-                    onChange={(e) => {
-                        setBandwidthHzInput(e.target.value);
-                        setDirtyInputs((prev) => ({ ...prev, bandwidth_hz: true }));
-                    }}
+                    onChange={(e) => setBandwidthHzInput(e.target.value)}
                     onFocus={() => setActiveInput('bandwidth_hz')}
                     onBlur={() => setActiveInput(null)}
                 >
@@ -275,10 +245,7 @@ export const RadioViewer = () => {
                     label='Gain (auto or dB)'
                     value={gainInput}
                     disabled={isSavingMode}
-                    onChange={(e) => {
-                        setGainInput(e.target.value);
-                        setDirtyInputs((prev) => ({ ...prev, gain: true }));
-                    }}
+                    onChange={(e) => setGainInput(e.target.value)}
                     onFocus={() => setActiveInput('gain')}
                     onBlur={() => setActiveInput(null)}
                 />
@@ -287,10 +254,7 @@ export const RadioViewer = () => {
                     label='N_Ave'
                     value={nAveInput}
                     disabled={isSavingMode}
-                    onChange={(e) => {
-                        setNAveInput(e.target.value);
-                        setDirtyInputs((prev) => ({ ...prev, n_ave: true }));
-                    }}
+                    onChange={(e) => setNAveInput(e.target.value)}
                     onFocus={() => setActiveInput('n_ave')}
                     onBlur={() => setActiveInput(null)}
                 />
