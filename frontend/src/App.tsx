@@ -46,7 +46,7 @@ function App() {
 
 				<div className="app-content">
 					<MapController isTrackMode={isTrackMode} onTrackModeChange={setIsTrackMode} />
-					<RadioViewer isTrackMode={isTrackMode} />
+					<RadioViewer />
 				</div>
 			</div>
 		</ThemeProvider>
