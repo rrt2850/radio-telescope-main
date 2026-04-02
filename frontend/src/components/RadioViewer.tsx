@@ -196,6 +196,12 @@ export const RadioViewer = () => {
 
     const { data } = payload;
     const hasColdProfile = Boolean(data.cold_profile_db);
+    const startFreqMhz = formatMhz(data.center_freq_hz - data.bandwidth_hz / 2);
+    const centerFreqMhz = formatMhz(data.center_freq_hz);
+    const endFreqMhz = formatMhz(data.center_freq_hz + data.bandwidth_hz / 2);
+    const maxPowerDb = chartData.max.toFixed(2);
+    const meanPowerDb = chartData.mean.toFixed(2);
+    const minPowerDb = chartData.min.toFixed(2);
 
     const updateMode = async (modePatch: { record_mode?: 'instant' | 'average'; observation_mode?: 'spectrum' | 'hotcold' }) => {
         setIsSavingMode(true);
@@ -336,11 +342,25 @@ export const RadioViewer = () => {
             )}
 
             <Box className='radio-visuals'>
-                <svg viewBox='0 0 100 100' preserveAspectRatio='none' className='radio-chart'>
-                    <line className='radio-chart__avg-line' x1='0' y1={chartData.averageY} x2='100' y2={chartData.averageY} />
-                    <polyline className='radio-chart__raw-line' points={chartData.points} />
-                    <polyline className='radio-chart__line' points={chartData.smoothPoints} />
-                </svg>
+                <Box className='radio-chart-wrapper'>
+                    <Box className='radio-chart-row'>
+                        <Box className='radio-chart__y-labels'>
+                            <span>{maxPowerDb} dB</span>
+                            <span>{meanPowerDb} dB</span>
+                            <span>{minPowerDb} dB</span>
+                        </Box>
+                        <svg viewBox='0 0 100 100' preserveAspectRatio='none' className='radio-chart'>
+                            <line className='radio-chart__avg-line' x1='0' y1={chartData.averageY} x2='100' y2={chartData.averageY} />
+                            <polyline className='radio-chart__raw-line' points={chartData.points} />
+                            <polyline className='radio-chart__line' points={chartData.smoothPoints} />
+                        </svg>
+                    </Box>
+                    <Box className='radio-chart__x-labels'>
+                        <span>{startFreqMhz} MHz</span>
+                        <span>{centerFreqMhz} MHz</span>
+                        <span>{endFreqMhz} MHz</span>
+                    </Box>
+                </Box>
                 <HydrogenSkyMap rows={MAP_ROWS} cols={MAP_COLS} pixels={displayedMapPixels} isScanMode={isScanMode} />
             </Box>
 

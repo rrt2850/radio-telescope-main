@@ -108,6 +108,39 @@ body {
 	background: rgba(22, 30, 42, 0.92);
 }
 
+.radio-chart-wrapper {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.radio-chart-row {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
+	gap: 8px;
+	align-items: stretch;
+}
+
+.radio-chart__y-labels {
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	font-size: 0.75rem;
+	color: var(--color-text);
+	opacity: 0.78;
+	min-width: 56px;
+	text-align: right;
+}
+
+.radio-chart__x-labels {
+	display: flex;
+	justify-content: space-between;
+	font-size: 0.75rem;
+	color: var(--color-text);
+	opacity: 0.78;
+	padding-left: 64px;
+}
+
 .radio-chart__avg-line {
 	stroke: rgba(199, 210, 226, 0.92);
 	stroke-width: 1.1;
