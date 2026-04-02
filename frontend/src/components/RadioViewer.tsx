@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { Box, Button, CircularProgress, MenuItem, TextField, Typography } from '@mui/material';
+import { HydrogenSkyMap } from './HydrogenSkyMap';
 
 type RadioPayload = {
     status: string;
@@ -29,6 +30,21 @@ const RADIO_ENDPOINT = 'https://spex-telescope-backend.online/radio';
 
 const formatMhz = (valueHz: number) => (valueHz / 1_000_000).toFixed(6);
 
+const MAP_ROWS = 12;
+const MAP_COLS = 24;
+const MAP_SIZE = MAP_ROWS * MAP_COLS;
+const BLANK_PIXEL = '#000000';
+
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+const colorFromIntensity = (normalizedIntensity: number) => {
+    const intensity = clamp(normalizedIntensity, 0, 1);
+    const hue = 220 - intensity * 165;
+    const lightness = 10 + intensity * 48;
+    const saturation = 90;
+    return `hsl(${hue.toFixed(1)} ${saturation}% ${lightness.toFixed(1)}%)`;
+};
+
 export const RadioViewer = () => {
     const [payload, setPayload] = useState<RadioPayload | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -38,6 +54,8 @@ export const RadioViewer = () => {
     const [gainInput, setGainInput] = useState('');
     const [nAveInput, setNAveInput] = useState('');
     const [isEditingSignalConfig, setIsEditingSignalConfig] = useState(false);
+    const [scanPixels, setScanPixels] = useState<string[]>(() => Array(MAP_SIZE).fill(BLANK_PIXEL));
+    const [scanIndex, setScanIndex] = useState(0);
     useEffect(() => {
         let isMounted = true;
 
@@ -69,7 +87,7 @@ export const RadioViewer = () => {
     const chartData = useMemo(() => {
         const values = payload?.data?.calibrated_power_db ?? payload?.data?.averaged_power_db ?? payload?.data?.power_db;
         if (!values || values.length === 0) {
-            return { points: '', smoothPoints: '', averageY: 50 };
+            return { points: '', smoothPoints: '', averageY: 50, min: 0, max: 1, mean: 0 };
         }
 
         const min = Math.min(...values);
@@ -106,8 +124,44 @@ export const RadioViewer = () => {
         const averageNormalized = (mean - min) / span;
         const averageY = 100 - averageNormalized * 100;
 
-        return { points, smoothPoints, averageY };
+        return { points, smoothPoints, averageY, min, max, mean };
     }, [payload]);
+
+    const isScanMode = payload?.data?.record_mode === 'instant';
+    const signalIntensity = useMemo(() => {
+        if (!payload?.data) {
+            return 0;
+        }
+
+        const peak = payload.data.peak_power_db;
+        const span = chartData.max - chartData.min || 1;
+        return clamp((peak - chartData.min) / span, 0, 1);
+    }, [payload, chartData.max, chartData.min]);
+
+    const currentPixelColor = useMemo(() => colorFromIntensity(signalIntensity), [signalIntensity]);
+
+    useEffect(() => {
+        if (!payload?.data?.timestamp) {
+            return;
+        }
+
+        if (!isScanMode) {
+            setScanPixels(Array(MAP_SIZE).fill(currentPixelColor));
+            setScanIndex(0);
+            return;
+        }
+
+        setScanIndex((previousIndex) => {
+            setScanPixels((previousPixels) => {
+                const next = [...previousPixels];
+                next[previousIndex % MAP_SIZE] = currentPixelColor;
+                return next;
+            });
+            return (previousIndex + 1) % MAP_SIZE;
+        });
+    }, [payload?.data?.timestamp, isScanMode, currentPixelColor]);
+
+    const displayedMapPixels = isScanMode ? scanPixels : Array(MAP_SIZE).fill(currentPixelColor);
 
     useEffect(() => {
         if (!payload?.data || isEditingSignalConfig) {
@@ -281,11 +335,14 @@ export const RadioViewer = () => {
                 </Typography>
             )}
 
-            <svg viewBox='0 0 100 100' preserveAspectRatio='none' className='radio-chart'>
-                <line className='radio-chart__avg-line' x1='0' y1={chartData.averageY} x2='100' y2={chartData.averageY} />
-                <polyline className='radio-chart__raw-line' points={chartData.points} />
-                <polyline className='radio-chart__line' points={chartData.smoothPoints} />
-            </svg>
+            <Box className='radio-visuals'>
+                <svg viewBox='0 0 100 100' preserveAspectRatio='none' className='radio-chart'>
+                    <line className='radio-chart__avg-line' x1='0' y1={chartData.averageY} x2='100' y2={chartData.averageY} />
+                    <polyline className='radio-chart__raw-line' points={chartData.points} />
+                    <polyline className='radio-chart__line' points={chartData.smoothPoints} />
+                </svg>
+                <HydrogenSkyMap rows={MAP_ROWS} cols={MAP_COLS} pixels={displayedMapPixels} isScanMode={isScanMode} />
+            </Box>
 
             <Typography variant='caption' display='block'>
                 Last update: {new Date(data.timestamp * 1000).toLocaleTimeString()}
