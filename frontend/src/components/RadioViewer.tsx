@@ -279,13 +279,13 @@ export const RadioViewer = () => {
             <svg viewBox='0 0 100 100' preserveAspectRatio='none' className='radio-chart'>
                 <defs>
                     <linearGradient id='radioWaveStroke' x1='0%' y1='0%' x2='100%' y2='0%'>
-                        <stop offset='0%' stopColor='#34d399' />
-                        <stop offset='55%' stopColor='#38bdf8' />
-                        <stop offset='100%' stopColor='#a78bfa' />
+                        <stop offset='0%' stopColor='#5fb6a4' />
+                        <stop offset='55%' stopColor='#6ca9c9' />
+                        <stop offset='100%' stopColor='#8e87be' />
                     </linearGradient>
                     <linearGradient id='radioWaveFill' x1='0%' y1='0%' x2='0%' y2='100%'>
-                        <stop offset='0%' stopColor='rgba(56, 189, 248, 0.35)' />
-                        <stop offset='100%' stopColor='rgba(56, 189, 248, 0)' />
+                        <stop offset='0%' stopColor='rgba(108, 169, 201, 0.24)' />
+                        <stop offset='100%' stopColor='rgba(108, 169, 201, 0.03)' />
                     </linearGradient>
                 </defs>
                 <line className='radio-chart__avg-line' x1='0' y1={chartData.averageY} x2='100' y2={chartData.averageY} />

@@ -106,14 +106,14 @@ body {
 	border: 1px solid var(--color-border);
 	padding: 8px;
 	background:
-		radial-gradient(circle at top, rgba(56, 189, 248, 0.2), transparent 55%),
-		linear-gradient(140deg, rgba(15, 23, 42, 0.96), rgba(30, 41, 59, 0.92));
+		radial-gradient(circle at top, rgba(120, 152, 193, 0.12), transparent 58%),
+		linear-gradient(140deg, rgba(22, 30, 42, 0.95), rgba(34, 42, 55, 0.92));
 }
 
 .radio-chart__avg-line {
-	stroke: rgba(148, 163, 184, 0.75);
-	stroke-width: 0.8;
-	stroke-dasharray: 1.5 1;
+	stroke: rgba(199, 210, 226, 0.92);
+	stroke-width: 1.1;
+	stroke-dasharray: 2 1.2;
 }
 
 .radio-chart__fill {
@@ -123,8 +123,8 @@ body {
 
 .radio-chart__line-glow {
 	fill: none;
-	stroke: rgba(56, 189, 248, 0.45);
-	stroke-width: 3.4;
+	stroke: rgba(108, 169, 201, 0.32);
+	stroke-width: 2.6;
 	stroke-linecap: round;
 	stroke-linejoin: round;
 }
