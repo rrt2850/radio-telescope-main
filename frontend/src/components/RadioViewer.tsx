@@ -69,13 +69,22 @@ export const RadioViewer = () => {
     const chartData = useMemo(() => {
         const values = payload?.data?.calibrated_power_db ?? payload?.data?.averaged_power_db ?? payload?.data?.power_db;
         if (!values || values.length === 0) {
-            return { points: '', path: '', averageY: 50 };
+            return { points: '', smoothPoints: '', averageY: 50 };
         }
 
         const min = Math.min(...values);
         const max = Math.max(...values);
         const span = max - min || 1;
         const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
+        const smoothingWindow = 11;
+        const smoothingRadius = Math.floor(smoothingWindow / 2);
+
+        const smoothedValues = values.map((_, index) => {
+            const start = Math.max(0, index - smoothingRadius);
+            const end = Math.min(values.length - 1, index + smoothingRadius);
+            const slice = values.slice(start, end + 1);
+            return slice.reduce((sum, value) => sum + value, 0) / slice.length;
+        });
 
         const normalizedPoints = values.map((value, index) => {
             const x = values.length > 1 ? (index / (values.length - 1)) * 100 : 50;
@@ -84,24 +93,20 @@ export const RadioViewer = () => {
             return { x, y };
         });
 
+        const smoothedNormalizedPoints = smoothedValues.map((value, index) => {
+            const x = values.length > 1 ? (index / (values.length - 1)) * 100 : 50;
+            const normalizedY = (value - min) / span;
+            const y = 100 - normalizedY * 100;
+            return { x, y };
+        });
+
         const points = normalizedPoints.map(({ x, y }) => `${x},${y}`).join(' ');
-
-        const path = normalizedPoints
-            .map((point, index) => {
-                if (index === 0) {
-                    return `M ${point.x} ${point.y}`;
-                }
-
-                const previous = normalizedPoints[index - 1];
-                const controlX = (previous.x + point.x) / 2;
-                return `Q ${controlX} ${previous.y}, ${point.x} ${point.y}`;
-            })
-            .join(' ');
+        const smoothPoints = smoothedNormalizedPoints.map(({ x, y }) => `${x},${y}`).join(' ');
 
         const averageNormalized = (mean - min) / span;
         const averageY = 100 - averageNormalized * 100;
 
-        return { points, path, averageY };
+        return { points, smoothPoints, averageY };
     }, [payload]);
 
     useEffect(() => {
@@ -277,21 +282,9 @@ export const RadioViewer = () => {
             )}
 
             <svg viewBox='0 0 100 100' preserveAspectRatio='none' className='radio-chart'>
-                <defs>
-                    <linearGradient id='radioWaveStroke' x1='0%' y1='0%' x2='100%' y2='0%'>
-                        <stop offset='0%' stopColor='#5fb6a4' />
-                        <stop offset='55%' stopColor='#6ca9c9' />
-                        <stop offset='100%' stopColor='#8e87be' />
-                    </linearGradient>
-                    <linearGradient id='radioWaveFill' x1='0%' y1='0%' x2='0%' y2='100%'>
-                        <stop offset='0%' stopColor='rgba(108, 169, 201, 0.24)' />
-                        <stop offset='100%' stopColor='rgba(108, 169, 201, 0.03)' />
-                    </linearGradient>
-                </defs>
                 <line className='radio-chart__avg-line' x1='0' y1={chartData.averageY} x2='100' y2={chartData.averageY} />
-                <polyline className='radio-chart__fill' points={`0,100 ${chartData.points} 100,100`} />
-                <path className='radio-chart__line-glow' d={chartData.path} />
-                <path className='radio-chart__line' d={chartData.path} />
+                <polyline className='radio-chart__raw-line' points={chartData.points} />
+                <polyline className='radio-chart__line' points={chartData.smoothPoints} />
             </svg>
 
             <Typography variant='caption' display='block'>

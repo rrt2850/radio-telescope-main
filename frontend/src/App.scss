@@ -105,9 +105,7 @@ body {
 	border-radius: 8px;
 	border: 1px solid var(--color-border);
 	padding: 8px;
-	background:
-		radial-gradient(circle at top, rgba(120, 152, 193, 0.12), transparent 58%),
-		linear-gradient(140deg, rgba(22, 30, 42, 0.95), rgba(34, 42, 55, 0.92));
+	background: rgba(22, 30, 42, 0.92);
 }
 
 .radio-chart__avg-line {
@@ -116,23 +114,18 @@ body {
 	stroke-dasharray: 2 1.2;
 }
 
-.radio-chart__fill {
-	fill: url(#radioWaveFill);
-	stroke: none;
-}
-
-.radio-chart__line-glow {
+.radio-chart__raw-line {
 	fill: none;
-	stroke: rgba(108, 169, 201, 0.32);
-	stroke-width: 2.6;
+	stroke: rgba(170, 185, 206, 0.45);
+	stroke-width: 0.8;
 	stroke-linecap: round;
 	stroke-linejoin: round;
 }
 
 .radio-chart__line {
 	fill: none;
-	stroke: url(#radioWaveStroke);
-	stroke-width: 1.6;
+	stroke: #7bc0d6;
+	stroke-width: 1.8;
 	stroke-linecap: round;
 	stroke-linejoin: round;
 }
