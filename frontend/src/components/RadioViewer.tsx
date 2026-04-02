@@ -66,24 +66,42 @@ export const RadioViewer = () => {
         };
     }, []);
 
-    const points = useMemo(() => {
+    const chartData = useMemo(() => {
         const values = payload?.data?.calibrated_power_db ?? payload?.data?.averaged_power_db ?? payload?.data?.power_db;
         if (!values || values.length === 0) {
-            return '';
+            return { points: '', path: '', averageY: 50 };
         }
 
         const min = Math.min(...values);
         const max = Math.max(...values);
         const span = max - min || 1;
+        const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
 
-        return values
-            .map((value, index) => {
-                const x = (index / (values.length - 1)) * 100;
-                const normalizedY = (value - min) / span;
-                const y = 100 - normalizedY * 100;
-                return `${x},${y}`;
+        const normalizedPoints = values.map((value, index) => {
+            const x = values.length > 1 ? (index / (values.length - 1)) * 100 : 50;
+            const normalizedY = (value - min) / span;
+            const y = 100 - normalizedY * 100;
+            return { x, y };
+        });
+
+        const points = normalizedPoints.map(({ x, y }) => `${x},${y}`).join(' ');
+
+        const path = normalizedPoints
+            .map((point, index) => {
+                if (index === 0) {
+                    return `M ${point.x} ${point.y}`;
+                }
+
+                const previous = normalizedPoints[index - 1];
+                const controlX = (previous.x + point.x) / 2;
+                return `Q ${controlX} ${previous.y}, ${point.x} ${point.y}`;
             })
             .join(' ');
+
+        const averageNormalized = (mean - min) / span;
+        const averageY = 100 - averageNormalized * 100;
+
+        return { points, path, averageY };
     }, [payload]);
 
     useEffect(() => {
@@ -259,7 +277,21 @@ export const RadioViewer = () => {
             )}
 
             <svg viewBox='0 0 100 100' preserveAspectRatio='none' className='radio-chart'>
-                <polyline fill='none' stroke='currentColor' strokeWidth='2.2' points={points} />
+                <defs>
+                    <linearGradient id='radioWaveStroke' x1='0%' y1='0%' x2='100%' y2='0%'>
+                        <stop offset='0%' stopColor='#34d399' />
+                        <stop offset='55%' stopColor='#38bdf8' />
+                        <stop offset='100%' stopColor='#a78bfa' />
+                    </linearGradient>
+                    <linearGradient id='radioWaveFill' x1='0%' y1='0%' x2='0%' y2='100%'>
+                        <stop offset='0%' stopColor='rgba(56, 189, 248, 0.35)' />
+                        <stop offset='100%' stopColor='rgba(56, 189, 248, 0)' />
+                    </linearGradient>
+                </defs>
+                <line className='radio-chart__avg-line' x1='0' y1={chartData.averageY} x2='100' y2={chartData.averageY} />
+                <polyline className='radio-chart__fill' points={`0,100 ${chartData.points} 100,100`} />
+                <path className='radio-chart__line-glow' d={chartData.path} />
+                <path className='radio-chart__line' d={chartData.path} />
             </svg>
 
             <Typography variant='caption' display='block'>

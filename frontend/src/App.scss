@@ -105,5 +105,34 @@ body {
 	border-radius: 8px;
 	border: 1px solid var(--color-border);
 	padding: 8px;
-	background: color-mix(in srgb, var(--color-surface) 80%, var(--color-bg) 20%);
+	background:
+		radial-gradient(circle at top, rgba(56, 189, 248, 0.2), transparent 55%),
+		linear-gradient(140deg, rgba(15, 23, 42, 0.96), rgba(30, 41, 59, 0.92));
+}
+
+.radio-chart__avg-line {
+	stroke: rgba(148, 163, 184, 0.75);
+	stroke-width: 0.8;
+	stroke-dasharray: 1.5 1;
+}
+
+.radio-chart__fill {
+	fill: url(#radioWaveFill);
+	stroke: none;
+}
+
+.radio-chart__line-glow {
+	fill: none;
+	stroke: rgba(56, 189, 248, 0.45);
+	stroke-width: 3.4;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+.radio-chart__line {
+	fill: none;
+	stroke: url(#radioWaveStroke);
+	stroke-width: 1.6;
+	stroke-linecap: round;
+	stroke-linejoin: round;
 }
