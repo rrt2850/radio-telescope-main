@@ -259,7 +259,7 @@ export const RadioViewer = () => {
             )}
 
             <svg viewBox='0 0 100 100' preserveAspectRatio='none' className='radio-chart'>
-                <polyline fill='none' stroke='currentColor' strokeWidth='1.4' points={points} />
+                <polyline fill='none' stroke='currentColor' strokeWidth='2.2' points={points} />
             </svg>
 
             <Typography variant='caption' display='block'>
