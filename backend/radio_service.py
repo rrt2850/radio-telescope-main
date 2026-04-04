@@ -7,7 +7,9 @@ import numpy as np
 
 HYDROGEN_LINE_HZ = 1420.40575177e6
 CENTER_FREQ_HZ = HYDROGEN_LINE_HZ
-SAMPLE_RATE_HZ = 2.4e6
+# 1.024 Msps is the most stable default on common RTL-SDR dongles.
+# At 2.4 Msps some tuners repeatedly emit "[R82XX] PLL not locked!".
+SAMPLE_RATE_HZ = 1.024e6
 FFT_SIZE = 1024
 READ_SIZE = 4096
 UPDATE_INTERVAL_SECONDS = 1.0
