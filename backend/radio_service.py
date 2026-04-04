@@ -53,6 +53,7 @@ class RadioDataService:
         self._status = "idle"
         self._error: Optional[str] = None
         self._sdr = None
+        self._last_applied_settings: Optional[tuple[float, float, Union[str, float]]] = None
         self._window = np.hanning(FFT_SIZE)
         self._center_freq_hz = CENTER_FREQ_HZ
         self._sample_rate_hz = SAMPLE_RATE_HZ
@@ -270,10 +271,12 @@ class RadioDataService:
             self._sdr.sample_rate = self._sample_rate_hz
             self._sdr.center_freq = self._center_freq_hz
             self._sdr.gain = self._gain
+            self._last_applied_settings = (self._sample_rate_hz, self._center_freq_hz, self._gain)
             return True
         except Exception as exc:
             self._error = f"RTL-SDR unavailable: {exc}"
             self._sdr = None
+            self._last_applied_settings = None
             return False
 
     def _close_sdr(self):
@@ -284,6 +287,7 @@ class RadioDataService:
         except Exception:
             pass
         self._sdr = None
+        self._last_applied_settings = None
 
     def _read_power_hardware(self) -> np.ndarray:
         if self._sdr is None:
@@ -304,6 +308,12 @@ class RadioDataService:
     ) -> None:
         if self._sdr is None:
             return
+
+        desired_settings = (sample_rate_hz, center_freq_hz, gain)
+        if self._last_applied_settings == desired_settings:
+            return
+
         self._sdr.sample_rate = sample_rate_hz
         self._sdr.center_freq = center_freq_hz
         self._sdr.gain = gain
+        self._last_applied_settings = desired_settings
