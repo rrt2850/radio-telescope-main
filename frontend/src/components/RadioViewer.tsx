@@ -284,9 +284,9 @@ export const RadioViewer = () => {
                         setBandwidthHzInput(e.target.value);
                         setIsEditingSignalConfig(true);
                     }}
+                    helperText='Using 1.024 Msps avoids RTL-SDR tuner lock errors.'
                 >
                     <MenuItem value='1024000'>1024000</MenuItem>
-                    <MenuItem value='2400000'>2400000</MenuItem>
                 </TextField>
                 <TextField
                     size='small'

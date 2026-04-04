@@ -15,7 +15,9 @@ READ_SIZE = 4096
 UPDATE_INTERVAL_SECONDS = 1.0
 MIN_CENTER_FREQ_HZ = 1.35e9
 MAX_CENTER_FREQ_HZ = 1.50e9
-ALLOWED_SAMPLE_RATES_HZ = (1.024e6, 2.4e6)
+# Keep this list conservative for reliability on R82XX-based RTL-SDR tuners.
+# 2.4 Msps often triggers repeated "[R82XX] PLL not locked!" errors in practice.
+ALLOWED_SAMPLE_RATES_HZ = (1.024e6,)
 MIN_N_AVE = 1
 MAX_N_AVE = 4096
 
