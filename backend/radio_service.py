@@ -14,8 +14,6 @@ UPDATE_INTERVAL_SECONDS = 1.0
 MIN_CENTER_FREQ_HZ = 1.35e9
 MAX_CENTER_FREQ_HZ = 1.50e9
 ALLOWED_SAMPLE_RATES_HZ = (1.024e6, 2.4e6)
-MIN_GAIN_DB = 0.0
-MAX_GAIN_DB = 49.6
 MIN_N_AVE = 1
 MAX_N_AVE = 4096
 
@@ -54,7 +52,7 @@ class RadioDataService:
         self._window = np.hanning(FFT_SIZE)
         self._center_freq_hz = CENTER_FREQ_HZ
         self._sample_rate_hz = SAMPLE_RATE_HZ
-        self._gain: Union[str, float] = "auto"
+        self._gain: Union[str, float] = 46.9
         self._n_ave = 32
         self._record_mode = "average"  # "instant" | "average"
         self._observation_mode = "spectrum"  # "spectrum" | "hotcold"
@@ -119,7 +117,7 @@ class RadioDataService:
         observation_mode: Optional[str] = None,
         center_freq_hz: Optional[float] = None,
         bandwidth_hz: Optional[float] = None,
-        gain: Optional[str] = None,
+        gain: Optional[Union[str, float]] = None,
         n_ave: Optional[int] = None,
     ) -> None:
         with self._lock:
@@ -151,15 +149,12 @@ class RadioDataService:
                     self._sample_rate_hz = bandwidth_hz
                     should_restart_scan = True
             if gain is not None:
-                normalized_gain = gain.strip().lower()
-                if normalized_gain == "auto":
+                if isinstance(gain, str) and gain.strip().lower() == "auto":
                     if self._gain != "auto":
                         self._gain = "auto"
                         should_restart_scan = True
                 else:
                     numeric_gain = float(gain)
-                    if numeric_gain < MIN_GAIN_DB or numeric_gain > MAX_GAIN_DB:
-                        raise ValueError(f"gain must be 'auto' or between {MIN_GAIN_DB} and {MAX_GAIN_DB}")
                     if self._gain != numeric_gain:
                         self._gain = numeric_gain
                         should_restart_scan = True

@@ -2,7 +2,7 @@ from fastapi import FastAPI, BackgroundTasks
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, model_validator
-from typing import Optional
+from typing import Optional, Union
 
 from robutils import CoordsTo
 from ArduinoController import ArduinoController
@@ -40,7 +40,7 @@ class RadioConfigRequest(BaseModel):
     observation_mode: Optional[str] = None
     center_freq_hz: Optional[float] = None
     bandwidth_hz: Optional[float] = None
-    gain: Optional[str] = None
+    gain: Optional[Union[str, float]] = None
     n_ave: Optional[int] = None
 
 app = FastAPI(title="Radio Telescope Control API")
