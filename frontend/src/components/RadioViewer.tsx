@@ -25,7 +25,7 @@ type RadioPayload = {
     } | null;
 };
 
-const RADIO_ENDPOINT = 'https://spex-telescope-backend.online/radio';
+const RADIO_ENDPOINT = '/radio';
 
 const formatMhz = (valueHz: number) => (valueHz / 1_000_000).toFixed(6);
 
@@ -171,7 +171,7 @@ export const RadioViewer = () => {
         const submittedConfig = {
             center_freq_hz: Number(centerFreqHzInput),
             bandwidth_hz: Number(bandwidthHzInput),
-            gain: gainInput.trim() || 'auto',
+            gain: gainInput.trim() === '' ? data.gain : gainInput.trim(),
             n_ave: Number(nAveInput),
         };
 
