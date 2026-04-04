@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { Box, Button, CircularProgress, MenuItem, TextField, Typography } from '@mui/material';
 
@@ -38,33 +38,36 @@ export const RadioViewer = () => {
     const [gainInput, setGainInput] = useState('');
     const [nAveInput, setNAveInput] = useState('');
     const [isEditingSignalConfig, setIsEditingSignalConfig] = useState(false);
+    const fetchRadio = useCallback(async () => {
+        try {
+            const response = await axios.get<RadioPayload>(RADIO_ENDPOINT);
+            setPayload(response.data);
+            setIsLoading(false);
+        } catch (error) {
+            setPayload({ status: 'error', error: 'Unable to reach radio endpoint.', data: null });
+            setIsLoading(false);
+            console.error('Error fetching radio data:', error);
+        }
+    }, []);
+
     useEffect(() => {
         let isMounted = true;
 
-        const fetchRadio = async () => {
-            try {
-                const response = await axios.get<RadioPayload>(RADIO_ENDPOINT);
-                if (isMounted) {
-                    setPayload(response.data);
-                    setIsLoading(false);
-                }
-            } catch (error) {
-                if (isMounted) {
-                    setPayload({ status: 'error', error: 'Unable to reach radio endpoint.', data: null });
-                    setIsLoading(false);
-                }
-                console.error('Error fetching radio data:', error);
+        const fetchRadioIfMounted = async () => {
+            if (!isMounted) {
+                return;
             }
+            await fetchRadio();
         };
 
-        fetchRadio();
-        const intervalId = window.setInterval(fetchRadio, 2000);
+        void fetchRadioIfMounted();
+        const intervalId = window.setInterval(fetchRadioIfMounted, 2000);
 
         return () => {
             isMounted = false;
             window.clearInterval(intervalId);
         };
-    }, []);
+    }, [fetchRadio]);
 
     const chartData = useMemo(() => {
         const values = payload?.data?.calibrated_power_db ?? payload?.data?.averaged_power_db ?? payload?.data?.power_db;
@@ -142,9 +145,12 @@ export const RadioViewer = () => {
 
     const { data } = payload;
     const hasColdProfile = Boolean(data.cold_profile_db);
-    const startFreqMhz = formatMhz(data.center_freq_hz - data.bandwidth_hz / 2);
-    const centerFreqMhz = formatMhz(data.center_freq_hz);
-    const endFreqMhz = formatMhz(data.center_freq_hz + data.bandwidth_hz / 2);
+    const firstBinHz = data.bins_hz[0] ?? data.center_freq_hz - data.bandwidth_hz / 2;
+    const middleBinHz = data.bins_hz[Math.floor(data.bins_hz.length / 2)] ?? data.center_freq_hz;
+    const lastBinHz = data.bins_hz[data.bins_hz.length - 1] ?? data.center_freq_hz + data.bandwidth_hz / 2;
+    const startFreqMhz = formatMhz(firstBinHz);
+    const centerFreqMhz = formatMhz(middleBinHz);
+    const endFreqMhz = formatMhz(lastBinHz);
     const maxPowerDb = chartData.max.toFixed(2);
     const meanPowerDb = chartData.mean.toFixed(2);
     const minPowerDb = chartData.min.toFixed(2);
@@ -152,8 +158,8 @@ export const RadioViewer = () => {
     const updateMode = async (modePatch: { record_mode?: 'instant' | 'average'; observation_mode?: 'spectrum' | 'hotcold' }) => {
         setIsSavingMode(true);
         try {
-            const response = await axios.post<RadioPayload>(`${RADIO_ENDPOINT}/config`, modePatch);
-            setPayload(response.data);
+            await axios.post<RadioPayload>(`${RADIO_ENDPOINT}/config`, modePatch);
+            await fetchRadio();
         } catch (error) {
             console.error('Failed to update radio mode', error);
         } finally {
@@ -171,8 +177,33 @@ export const RadioViewer = () => {
 
         setIsSavingMode(true);
         try {
-            const response = await axios.post<RadioPayload>(`${RADIO_ENDPOINT}/config`, submittedConfig);
-            setPayload(response.data);
+            await axios.post<RadioPayload>(`${RADIO_ENDPOINT}/config`, submittedConfig);
+            setPayload((previousPayload) => {
+                if (!previousPayload?.data) {
+                    return previousPayload;
+                }
+
+                const nextCenterFreqHz = submittedConfig.center_freq_hz;
+                const nextBandwidthHz = submittedConfig.bandwidth_hz;
+                const binCount = previousPayload.data.bins_hz.length;
+                const nextStartHz = nextCenterFreqHz - nextBandwidthHz / 2;
+                const nextStepHz = nextBandwidthHz / Math.max(binCount - 1, 1);
+                const remappedBins = previousPayload.data.bins_hz.map((_, index) => nextStartHz + index * nextStepHz);
+
+                return {
+                    ...previousPayload,
+                    data: {
+                        ...previousPayload.data,
+                        center_freq_hz: nextCenterFreqHz,
+                        bandwidth_hz: nextBandwidthHz,
+                        gain: submittedConfig.gain,
+                        n_ave: submittedConfig.n_ave,
+                        integration_count: 0,
+                        bins_hz: remappedBins,
+                    },
+                };
+            });
+            await fetchRadio();
             setIsEditingSignalConfig(false);
         } catch (error) {
             console.error('Failed to update radio signal config', error);

@@ -123,13 +123,13 @@ class RadioDataService:
         n_ave: Optional[int] = None,
     ) -> None:
         with self._lock:
+            should_restart_scan = False
             if record_mode is not None:
                 if record_mode not in ("instant", "average"):
                     raise ValueError("record_mode must be 'instant' or 'average'")
-                self._record_mode = record_mode
-                if record_mode == "instant":
-                    self._integration_sum = None
-                    self._integration_count = 0
+                if self._record_mode != record_mode:
+                    self._record_mode = record_mode
+                    should_restart_scan = True
             if observation_mode is not None:
                 if observation_mode not in ("spectrum", "hotcold"):
                     raise ValueError("observation_mode must be 'spectrum' or 'hotcold'")
@@ -140,26 +140,40 @@ class RadioDataService:
                     raise ValueError(
                         f"center_freq_hz must be between {MIN_CENTER_FREQ_HZ} and {MAX_CENTER_FREQ_HZ}"
                     )
-                self._center_freq_hz = center_freq_hz
+                if self._center_freq_hz != center_freq_hz:
+                    self._center_freq_hz = center_freq_hz
+                    should_restart_scan = True
             if bandwidth_hz is not None:
                 bandwidth_hz = float(bandwidth_hz)
                 if bandwidth_hz not in ALLOWED_SAMPLE_RATES_HZ:
                     raise ValueError(f"bandwidth_hz must be one of {ALLOWED_SAMPLE_RATES_HZ}")
-                self._sample_rate_hz = bandwidth_hz
+                if self._sample_rate_hz != bandwidth_hz:
+                    self._sample_rate_hz = bandwidth_hz
+                    should_restart_scan = True
             if gain is not None:
                 normalized_gain = gain.strip().lower()
                 if normalized_gain == "auto":
-                    self._gain = "auto"
+                    if self._gain != "auto":
+                        self._gain = "auto"
+                        should_restart_scan = True
                 else:
                     numeric_gain = float(gain)
                     if numeric_gain < MIN_GAIN_DB or numeric_gain > MAX_GAIN_DB:
                         raise ValueError(f"gain must be 'auto' or between {MIN_GAIN_DB} and {MAX_GAIN_DB}")
-                    self._gain = numeric_gain
+                    if self._gain != numeric_gain:
+                        self._gain = numeric_gain
+                        should_restart_scan = True
             if n_ave is not None:
                 n_ave = int(n_ave)
                 if n_ave < MIN_N_AVE or n_ave > MAX_N_AVE:
                     raise ValueError(f"n_ave must be between {MIN_N_AVE} and {MAX_N_AVE}")
-                self._n_ave = n_ave
+                if self._n_ave != n_ave:
+                    self._n_ave = n_ave
+                    should_restart_scan = True
+
+            if should_restart_scan:
+                self._integration_sum = None
+                self._integration_count = 0
 
     def capture_cold_profile(self) -> bool:
         with self._lock:
