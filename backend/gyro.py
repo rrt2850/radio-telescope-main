@@ -30,6 +30,9 @@ REFERENCE_YEAR = 2026
 # How much of the new acceleration do we use compared to the old one
 NEW_ACCELERATION_WEIGHT = 0.2
 
+# How often to read the magnetometer (it updates slower than the main loop)
+MAG_UPDATE_INTERVAL = 0.1  # seconds
+
 CAL_FILE = "mag_calibration.json"
 
 
@@ -220,8 +223,8 @@ currAlt = altFromAccel(ax, ay, az)
 currAz = azFromMagTiltComp(mx, my, mz, ax, ay, az)
 
 print("Starting angles:")
-print(f"Azimuth: {currAz}")
-print(f"Altitude: {currAlt}")
+print(f"Azimuth:  {currAz:.2f}°")
+print(f"Altitude: {currAlt:.2f}°")
 
 
 # ---------------------------
@@ -236,7 +239,11 @@ writer.writerow(["time", "azimuth", "altitude"])
 # Main Loop
 # ---------------------------
 smoothedAX, smoothedAY, smoothedAZ = ax, ay, az
+azMag = currAz   # initialize so first loop iteration has a valid value
+altMag = currAlt
+
 prev = time.time()
+last_mag_update = 0
 
 try:
     while True:
@@ -246,7 +253,6 @@ try:
 
         ax, ay, az = imu.acceleration
         gx, gy, gz = imu.gyro
-        mx, my, mz = applyMagCal(*imu.magnetic)
 
         # Smooth accel (reduce noise)
         smoothedAX = NEW_ACCELERATION_WEIGHT * ax + (1 - NEW_ACCELERATION_WEIGHT) * smoothedAX
@@ -258,28 +264,37 @@ try:
         gy -= gyroYBias
         gz -= gyroZBias
 
+        # Only read the magnetometer at MAG_UPDATE_INTERVAL to avoid stale repeated reads
+        if now - last_mag_update >= MAG_UPDATE_INTERVAL:
+            mx, my, mz = applyMagCal(*imu.magnetic)
+            azMag  = azFromMagTiltComp(mx, my, mz, smoothedAX, smoothedAY, smoothedAZ)
+            altMag = altFromAccel(smoothedAX, smoothedAY, smoothedAZ)
+            last_mag_update = now
+
         # Integrate gyro
-        azGyro = currAz + math.degrees(gz * dt)
+        azGyro  = currAz  + math.degrees(gz * dt)
         altGyro = currAlt + math.degrees(gy * dt)
 
-        # Absolute angles
-        azMag = azFromMagTiltComp(mx, my, mz, smoothedAX, smoothedAY, smoothedAZ)
-        altMag = altFromAccel(smoothedAX, smoothedAY, smoothedAZ)
-
-        # Wraparound fix
+        # Wraparound-safe azimuth error
         azError = constrain180(azMag - azGyro)
 
         # Complementary filter
         currAz = constrain360(
             azGyro + (1 - AZIMUTH_GYRO_WEIGHT) * azError
         )
-
         currAlt = (
             ALTITUDE_GYRO_WEIGHT * altGyro +
             (1 - ALTITUDE_GYRO_WEIGHT) * altMag
         )
 
-        print(f"\r\033[KAzimuth: {currAz:.2f}°, Altitude: {currAlt:.2f}°", end="", flush=True)
+        # Debug line — remove once you're happy it's working
+        print(
+            f"\r\033[K"
+            f"Az: {currAz:.2f}°  "
+            f"Alt: {currAlt:.2f}°  "
+            f"[mag az: {azMag:.1f}°  gyro az: {azGyro:.1f}°]",
+            end="", flush=True
+        )
 
         writer.writerow([now, currAz, currAlt])
         log.flush()
