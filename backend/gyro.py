@@ -149,6 +149,8 @@ def applyMagCal(mx, my, mz):
     mx = (mx - magCal["offsetX"]) * magCal["scaleX"]
     my = (my - magCal["offsetY"]) * magCal["scaleY"]
     mz = (mz - magCal["offsetZ"]) * magCal["scaleZ"]
+    # Negate Y to compensate for AK09916 axis inversion inside ICM20948
+    my = -my
     return mx, my, mz
 
 
@@ -179,7 +181,8 @@ def azFromMagTiltComp(mx, my, mz, ax, ay, az):
         - mz * math.sin(roll) * math.cos(pitch)
     )
 
-    angle = math.degrees(math.atan2(my2, mx2))
+    # Negated my2 per standard tilt-compensated heading formula
+    angle = math.degrees(math.atan2(-my2, mx2))
     angle += DECLINATION
 
     return constrain360(angle)
