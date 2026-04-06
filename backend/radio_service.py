@@ -169,12 +169,14 @@ class RadioDataService:
             return True
 
     def _run(self):
-        use_simulated = not self._open_sdr()
-
-        with self._lock:
-            self._status = "simulated" if use_simulated else "running"
-
         while not self._stop_event.is_set():
+            if self._sdr is None and not self._open_sdr():
+                with self._lock:
+                    self._status = "error"
+                    self._snapshot = None
+                time.sleep(UPDATE_INTERVAL_SECONDS)
+                continue
+
             try:
                 with self._lock:
                     record_mode = self._record_mode
@@ -186,9 +188,8 @@ class RadioDataService:
 
                 freqs = np.fft.fftshift(np.fft.fftfreq(FFT_SIZE, d=1.0 / sample_rate_hz)) + center_freq_hz
 
-                if not use_simulated:
-                    self._apply_hardware_settings(sample_rate_hz, center_freq_hz, gain)
-                power_db = self._read_power_simulated(freqs) if use_simulated else self._read_power_hardware()
+                self._apply_hardware_settings(sample_rate_hz, center_freq_hz, gain)
+                power_db = self._read_power_hardware()
 
                 if record_mode == "average":
                     if self._integration_sum is None:
@@ -219,7 +220,7 @@ class RadioDataService:
                     center_freq_hz=center_freq_hz,
                     peak_freq_hz=float(freqs[peak_idx]),
                     peak_power_db=float(peak_source[peak_idx]),
-                    source="simulation" if use_simulated else "rtl-sdr",
+                    source="rtl-sdr",
                     bandwidth_hz=sample_rate_hz,
                     gain=gain,
                     n_ave=n_ave,
@@ -234,12 +235,15 @@ class RadioDataService:
                 )
 
                 with self._lock:
+                    self._status = "running"
                     self._snapshot = snapshot
                     self._error = None
             except Exception as exc:
                 with self._lock:
                     self._status = "error"
                     self._error = str(exc)
+                    self._snapshot = None
+                self._close_sdr()
 
             time.sleep(UPDATE_INTERVAL_SECONDS)
 
@@ -253,7 +257,7 @@ class RadioDataService:
             self._sdr.gain = self._gain
             return True
         except Exception as exc:
-            self._error = f"RTL-SDR unavailable, using simulated radio data: {exc}"
+            self._error = f"RTL-SDR unavailable: {exc}"
             self._sdr = None
             return False
 
@@ -288,9 +292,3 @@ class RadioDataService:
         self._sdr.sample_rate = sample_rate_hz
         self._sdr.center_freq = center_freq_hz
         self._sdr.gain = gain
-
-    def _read_power_simulated(self, freqs: np.ndarray) -> np.ndarray:
-        noise = np.random.normal(loc=-95.0, scale=2.0, size=FFT_SIZE)
-        drift_hz = np.sin(time.time() / 10.0) * 20000.0
-        gaussian = 14.0 * np.exp(-((freqs - (HYDROGEN_LINE_HZ + drift_hz)) ** 2) / (2 * (45000.0 ** 2)))
-        return noise + gaussian
