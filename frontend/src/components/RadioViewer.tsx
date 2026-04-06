@@ -28,6 +28,8 @@ type RadioPayload = {
 const RADIO_ENDPOINT = 'https://spex-telescope-backend.online/radio';
 
 const formatMhz = (valueHz: number) => (valueHz / 1_000_000).toFixed(6);
+const CHART_VIEWBOX_SIZE = 100;
+const CHART_HEIGHT_PX = 280;
 
 export const RadioViewer = () => {
     const [payload, setPayload] = useState<RadioPayload | null>(null);
@@ -38,6 +40,7 @@ export const RadioViewer = () => {
     const [gainInput, setGainInput] = useState('');
     const [nAveInput, setNAveInput] = useState('');
     const [isEditingSignalConfig, setIsEditingSignalConfig] = useState(false);
+    const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
     useEffect(() => {
         let isMounted = true;
 
@@ -69,45 +72,48 @@ export const RadioViewer = () => {
     const chartData = useMemo(() => {
         const values = payload?.data?.calibrated_power_db ?? payload?.data?.averaged_power_db ?? payload?.data?.power_db;
         if (!values || values.length === 0) {
-            return { points: '', smoothPoints: '', averageY: 50, min: 0, max: 1, mean: 0 };
+            return {
+                points: '',
+                averageY: 50,
+                min: 0,
+                max: 1,
+                mean: 0,
+                pointData: [] as { x: number; y: number; powerDb: number; freqHz: number }[],
+            };
         }
 
+        const binsHz = payload?.data?.bins_hz ?? [];
+        const fallbackStartHz = (payload?.data?.center_freq_hz ?? 0) - (payload?.data?.bandwidth_hz ?? 0) / 2;
+        const fallbackStepHz = values.length > 1 ? (payload?.data?.bandwidth_hz ?? 0) / (values.length - 1) : 0;
         const min = Math.min(...values);
         const max = Math.max(...values);
         const span = max - min || 1;
         const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
-        const smoothingWindow = 11;
-        const smoothingRadius = Math.floor(smoothingWindow / 2);
 
-        const smoothedValues = values.map((_, index) => {
-            const start = Math.max(0, index - smoothingRadius);
-            const end = Math.min(values.length - 1, index + smoothingRadius);
-            const slice = values.slice(start, end + 1);
-            return slice.reduce((sum, value) => sum + value, 0) / slice.length;
-        });
-
-        const normalizedPoints = values.map((value, index) => {
+        const pointData = values.map((value, index) => {
             const x = values.length > 1 ? (index / (values.length - 1)) * 100 : 50;
             const normalizedY = (value - min) / span;
             const y = 100 - normalizedY * 100;
-            return { x, y };
+            const freqHz = binsHz[index] ?? fallbackStartHz + fallbackStepHz * index;
+            return { x, y, powerDb: value, freqHz };
         });
 
-        const smoothedNormalizedPoints = smoothedValues.map((value, index) => {
-            const x = values.length > 1 ? (index / (values.length - 1)) * 100 : 50;
-            const normalizedY = (value - min) / span;
-            const y = 100 - normalizedY * 100;
-            return { x, y };
-        });
-
-        const points = normalizedPoints.map(({ x, y }) => `${x},${y}`).join(' ');
-        const smoothPoints = smoothedNormalizedPoints.map(({ x, y }) => `${x},${y}`).join(' ');
+        const points = pointData.map(({ x, y }) => `${x},${y}`).join(' ');
 
         const averageNormalized = (mean - min) / span;
         const averageY = 100 - averageNormalized * 100;
 
-        return { points, smoothPoints, averageY, min, max, mean };
+        return { points, averageY, min, max, mean, pointData };
     }, [payload]);
+
+    useEffect(() => {
+        if (hoveredIndex === null) {
+            return;
+        }
+        if (hoveredIndex > chartData.pointData.length - 1) {
+            setHoveredIndex(null);
+        }
+    }, [chartData.pointData.length, hoveredIndex]);
 
     useEffect(() => {
         if (!payload?.data || isEditingSignalConfig) {
@@ -148,6 +154,9 @@ export const RadioViewer = () => {
     const maxPowerDb = chartData.max.toFixed(2);
     const meanPowerDb = chartData.mean.toFixed(2);
     const minPowerDb = chartData.min.toFixed(2);
+    const hoveredPoint = hoveredIndex !== null ? chartData.pointData[hoveredIndex] : null;
+    const tooltipLeft = hoveredPoint ? `${(hoveredPoint.x / CHART_VIEWBOX_SIZE) * 100}%` : '0%';
+    const tooltipTop = hoveredPoint ? `${(hoveredPoint.y / CHART_VIEWBOX_SIZE) * CHART_HEIGHT_PX}px` : '0px';
 
     const updateMode = async (modePatch: { record_mode?: 'instant' | 'average'; observation_mode?: 'spectrum' | 'hotcold' }) => {
         setIsSavingMode(true);
@@ -294,11 +303,44 @@ export const RadioViewer = () => {
                         <span>{meanPowerDb} dB</span>
                         <span>{minPowerDb} dB</span>
                     </Box>
-                    <svg viewBox='0 0 100 100' preserveAspectRatio='none' className='radio-chart'>
-                        <line className='radio-chart__avg-line' x1='0' y1={chartData.averageY} x2='100' y2={chartData.averageY} />
-                        <polyline className='radio-chart__raw-line' points={chartData.points} />
-                        <polyline className='radio-chart__line' points={chartData.smoothPoints} />
-                    </svg>
+                    <Box
+                        className='radio-chart-container'
+                        onMouseMove={(e) => {
+                            if (chartData.pointData.length === 0) {
+                                return;
+                            }
+                            const { left, width } = e.currentTarget.getBoundingClientRect();
+                            if (width <= 0) {
+                                return;
+                            }
+                            const relativeX = (e.clientX - left) / width;
+                            const clampedX = Math.min(1, Math.max(0, relativeX));
+                            const nextIndex = Math.round(clampedX * (chartData.pointData.length - 1));
+                            setHoveredIndex(nextIndex);
+                        }}
+                        onMouseLeave={() => setHoveredIndex(null)}
+                    >
+                        <svg viewBox='0 0 100 100' preserveAspectRatio='none' className='radio-chart'>
+                            <line className='radio-chart__avg-line' x1='0' y1={chartData.averageY} x2='100' y2={chartData.averageY} />
+                            <polyline className='radio-chart__line' points={chartData.points} />
+                            {hoveredPoint && (
+                                <>
+                                    <line className='radio-chart__crosshair' x1={hoveredPoint.x} y1='0' x2={hoveredPoint.x} y2='100' />
+                                    <circle className='radio-chart__focus-point' cx={hoveredPoint.x} cy={hoveredPoint.y} r='1.15' />
+                                </>
+                            )}
+                        </svg>
+                        {hoveredPoint && (
+                            <Box className='radio-chart__tooltip' sx={{ left: tooltipLeft, top: tooltipTop }}>
+                                <Typography variant='caption' component='div'>
+                                    {formatMhz(hoveredPoint.freqHz)} MHz
+                                </Typography>
+                                <Typography variant='caption' component='div'>
+                                    {hoveredPoint.powerDb.toFixed(2)} dB
+                                </Typography>
+                            </Box>
+                        )}
+                    </Box>
                 </Box>
                 <Box className='radio-chart__x-labels'>
                     <span>{startFreqMhz} MHz</span>

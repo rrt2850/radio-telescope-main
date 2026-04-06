@@ -106,6 +106,7 @@ body {
 	border: 1px solid var(--color-border);
 	padding: 8px;
 	background: rgba(22, 30, 42, 0.92);
+	display: block;
 }
 
 .radio-chart-wrapper {
@@ -158,8 +159,42 @@ body {
 .radio-chart__line {
 	fill: none;
 	stroke: #7bc0d6;
-	stroke-width: 1.8;
+	stroke-width: 1.1;
 	stroke-linecap: round;
 	stroke-linejoin: round;
+	vector-effect: non-scaling-stroke;
+	shape-rendering: geometricPrecision;
 }
 
+.radio-chart-container {
+	position: relative;
+	width: 100%;
+}
+
+.radio-chart__crosshair {
+	stroke: rgba(255, 255, 255, 0.5);
+	stroke-width: 0.45;
+	stroke-dasharray: 1.4 1.2;
+	vector-effect: non-scaling-stroke;
+}
+
+.radio-chart__focus-point {
+	fill: #c0f2ff;
+	stroke: #0a3f50;
+	stroke-width: 0.3;
+	vector-effect: non-scaling-stroke;
+}
+
+.radio-chart__tooltip {
+	position: absolute;
+	transform: translate(-50%, -110%);
+	padding: 6px 8px;
+	border-radius: 6px;
+	background: rgba(11, 18, 27, 0.96);
+	border: 1px solid rgba(226, 236, 247, 0.35);
+	color: #e6eef8;
+	pointer-events: none;
+	white-space: nowrap;
+	font-variant-numeric: tabular-nums;
+	box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
