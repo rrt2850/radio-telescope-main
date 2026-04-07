@@ -143,9 +143,17 @@ body {
 }
 
 .radio-chart__avg-line {
-	stroke: rgba(199, 210, 226, 0.92);
+	stroke: #f7b267;
 	stroke-width: 1.1;
 	stroke-dasharray: 2 1.2;
+	vector-effect: non-scaling-stroke;
+}
+
+.radio-chart__median-line {
+	stroke: #c792ea;
+	stroke-width: 1.1;
+	stroke-dasharray: 1.5 1.3;
+	vector-effect: non-scaling-stroke;
 }
 
 .radio-chart__raw-line {
@@ -183,6 +191,25 @@ body {
 	stroke: #0a3f50;
 	stroke-width: 0.3;
 	vector-effect: non-scaling-stroke;
+	opacity: 0.78;
+	transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.radio-chart__focus-point--avg {
+	fill: #f7b267;
+	stroke: #3c250a;
+}
+
+.radio-chart__focus-point--median {
+	fill: #c792ea;
+	stroke: #2f1644;
+}
+
+.radio-chart__focus-point.is-selected {
+	opacity: 1;
+	transform-box: fill-box;
+	transform-origin: center;
+	transform: scale(1.25);
 }
 
 .radio-chart__tooltip {
