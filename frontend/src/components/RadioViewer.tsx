@@ -397,12 +397,18 @@ export const RadioViewer = () => {
                         onMouseLeave={() => setHoveredIndex(null)}
                     >
                         <svg viewBox='0 0 100 100' preserveAspectRatio='none' className='radio-chart'>
+                            <polyline className='radio-chart__line' points={chartData.points} />
                             <polyline className='radio-chart__avg-line' points={chartData.averageTrendPoints} />
                             <polyline className='radio-chart__median-line' points={chartData.medianTrendPoints} />
-                            <polyline className='radio-chart__line' points={chartData.points} />
                             {hoveredPoint && (
                                 <>
                                     <line className='radio-chart__crosshair' x1={hoveredPoint.x} y1='0' x2={hoveredPoint.x} y2='100' />
+                                    <circle
+                                        className={`radio-chart__focus-point__glow ${selectedSeries === 'spectrum' ? 'is-selected' : ''}`}
+                                        cx={hoveredPoint.x}
+                                        cy={hoveredPoint.y}
+                                        r='2.8'
+                                    />
                                     <circle
                                         className={`radio-chart__focus-point ${selectedSeries === 'spectrum' ? 'is-selected' : ''}`}
                                         cx={hoveredPoint.x}
@@ -410,10 +416,22 @@ export const RadioViewer = () => {
                                         r='1.15'
                                     />
                                     <circle
+                                        className={`radio-chart__focus-point__glow radio-chart__focus-point__glow--avg ${selectedSeries === 'average' ? 'is-selected' : ''}`}
+                                        cx={hoveredPoint.x}
+                                        cy={hoveredPoint.averageTrendY}
+                                        r='2.4'
+                                    />
+                                    <circle
                                         className={`radio-chart__focus-point radio-chart__focus-point--avg ${selectedSeries === 'average' ? 'is-selected' : ''}`}
                                         cx={hoveredPoint.x}
                                         cy={hoveredPoint.averageTrendY}
                                         r='1.05'
+                                    />
+                                    <circle
+                                        className={`radio-chart__focus-point__glow radio-chart__focus-point__glow--median ${selectedSeries === 'median' ? 'is-selected' : ''}`}
+                                        cx={hoveredPoint.x}
+                                        cy={hoveredPoint.medianTrendY}
+                                        r='2.4'
                                     />
                                     <circle
                                         className={`radio-chart__focus-point radio-chart__focus-point--median ${selectedSeries === 'median' ? 'is-selected' : ''}`}
