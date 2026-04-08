@@ -31,13 +31,6 @@ const formatMhz = (valueHz: number) => (valueHz / 1_000_000).toFixed(6);
 const CHART_VIEWBOX_SIZE = 100;
 const CHART_HEIGHT_PX = 280;
 
-const getWindowValues = (values: number[], center: number, windowSize: number) => {
-    const half = Math.floor(windowSize / 2);
-    const start = Math.max(0, center - half);
-    const end = Math.min(values.length - 1, center + half);
-    return values.slice(start, end + 1);
-};
-
 export const RadioViewer = () => {
     const [payload, setPayload] = useState<RadioPayload | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -82,15 +75,12 @@ export const RadioViewer = () => {
         if (!values || values.length === 0) {
             return {
                 points: '',
-                rawPoints: '',
-                averagePoints: '',
-                medianPoints: '',
                 min: 0,
                 max: 1,
                 mean: 0,
                 median: 0,
-                averageSeries: [] as number[],
-                medianSeries: [] as number[],
+                averageY: 50,
+                medianY: 50,
                 pointData: [] as { x: number; y: number; powerDb: number; freqHz: number }[],
             };
         }
@@ -108,62 +98,23 @@ export const RadioViewer = () => {
                 ? (sortedValues[sortedValues.length / 2 - 1] + sortedValues[sortedValues.length / 2]) / 2
                 : sortedValues[Math.floor(sortedValues.length / 2)];
 
-        const trendWindow = Math.max(5, Math.floor(values.length / 45) * 2 + 1);
-        const smoothedValues = values.map((_, index) => {
-            const windowValues = getWindowValues(values, index, trendWindow);
-            return windowValues.reduce((sum, value) => sum + value, 0) / windowValues.length;
-        });
-
         const pointData = values.map((value, index) => {
             const x = values.length > 1 ? (index / (values.length - 1)) * 100 : 50;
-            const normalizedY = (smoothedValues[index] - min) / span;
+            const normalizedY = (value - min) / span;
             const y = 100 - normalizedY * 100;
             const freqHz = binsHz[index] ?? fallbackStartHz + fallbackStepHz * index;
             return { x, y, powerDb: value, freqHz };
         });
 
         const points = pointData.map(({ x, y }) => `${x},${y}`).join(' ');
-        const rawPoints = values
-            .map((value, index) => {
-                const x = values.length > 1 ? (index / (values.length - 1)) * 100 : 50;
-                const normalizedY = (value - min) / span;
-                const y = 100 - normalizedY * 100;
-                return `${x},${y}`;
-            })
-            .join(' ');
 
-        const averageSeries = values.map((_, index) => {
-            const windowValues = getWindowValues(values, index, trendWindow);
-            return windowValues.reduce((sum, value) => sum + value, 0) / windowValues.length;
-        });
+        const averageNormalized = (mean - min) / span;
+        const averageY = 100 - averageNormalized * 100;
 
-        const medianSeries = values.map((_, index) => {
-            const windowValues = getWindowValues(values, index, trendWindow).sort((a, b) => a - b);
-            const middleIndex = Math.floor(windowValues.length / 2);
-            return windowValues.length % 2 === 0
-                ? (windowValues[middleIndex - 1] + windowValues[middleIndex]) / 2
-                : windowValues[middleIndex];
-        });
+        const medianNormalized = (median - min) / span;
+        const medianY = 100 - medianNormalized * 100;
 
-        const averagePoints = averageSeries
-            .map((value, index) => {
-                const x = values.length > 1 ? (index / (values.length - 1)) * 100 : 50;
-                const normalizedY = (value - min) / span;
-                const y = 100 - normalizedY * 100;
-                return `${x},${y}`;
-            })
-            .join(' ');
-
-        const medianPoints = medianSeries
-            .map((value, index) => {
-                const x = values.length > 1 ? (index / (values.length - 1)) * 100 : 50;
-                const normalizedY = (value - min) / span;
-                const y = 100 - normalizedY * 100;
-                return `${x},${y}`;
-            })
-            .join(' ');
-
-        return { points, rawPoints, averagePoints, medianPoints, min, max, mean, median, averageSeries, medianSeries, pointData };
+        return { points, averageY, medianY, min, max, mean, median, pointData };
     }, [payload]);
 
     useEffect(() => {
@@ -216,19 +167,13 @@ export const RadioViewer = () => {
     const medianPowerDb = chartData.median.toFixed(2);
     const minPowerDb = chartData.min.toFixed(2);
     const hoveredPoint = hoveredIndex !== null ? chartData.pointData[hoveredIndex] : null;
-    const hoveredAverage = hoveredIndex !== null ? chartData.averageSeries[hoveredIndex] : null;
-    const hoveredMedian = hoveredIndex !== null ? chartData.medianSeries[hoveredIndex] : null;
-    const hoveredAverageY =
-        hoveredAverage !== null ? 100 - ((hoveredAverage - chartData.min) / (chartData.max - chartData.min || 1)) * 100 : 50;
-    const hoveredMedianY =
-        hoveredMedian !== null ? 100 - ((hoveredMedian - chartData.min) / (chartData.max - chartData.min || 1)) * 100 : 50;
 
     const selectedSeriesY =
         selectedSeries === 'average'
-            ? hoveredAverageY
+            ? chartData.averageY
             : selectedSeries === 'median'
-              ? hoveredMedianY
-              : hoveredPoint?.y ?? hoveredAverageY;
+              ? chartData.medianY
+              : hoveredPoint?.y ?? chartData.averageY;
     const tooltipLeft = hoveredPoint ? `${(hoveredPoint.x / CHART_VIEWBOX_SIZE) * 100}%` : '0%';
     const tooltipTop = `${(selectedSeriesY / CHART_VIEWBOX_SIZE) * CHART_HEIGHT_PX}px`;
 
@@ -248,17 +193,13 @@ export const RadioViewer = () => {
         setHoveredIndex(nextIndex);
 
         const hoveredY = ((event.clientY - top) / height) * 100;
-        const spectrumY = chartData.pointData[nextIndex]?.y ?? hoveredAverageY;
-        const averageValue = chartData.averageSeries[nextIndex] ?? chartData.mean;
-        const medianValue = chartData.medianSeries[nextIndex] ?? chartData.median;
-        const averageY = 100 - ((averageValue - chartData.min) / (chartData.max - chartData.min || 1)) * 100;
-        const medianY = 100 - ((medianValue - chartData.min) / (chartData.max - chartData.min || 1)) * 100;
+        const spectrumY = chartData.pointData[nextIndex]?.y ?? chartData.averageY;
 
         const nearestSeries = (
             [
                 { key: 'spectrum' as const, distance: Math.abs(hoveredY - spectrumY) },
-                { key: 'average' as const, distance: Math.abs(hoveredY - averageY) },
-                { key: 'median' as const, distance: Math.abs(hoveredY - medianY) },
+                { key: 'average' as const, distance: Math.abs(hoveredY - chartData.averageY) },
+                { key: 'median' as const, distance: Math.abs(hoveredY - chartData.medianY) },
             ]
         ).sort((a, b) => a.distance - b.distance)[0];
 
@@ -417,10 +358,9 @@ export const RadioViewer = () => {
                         onMouseLeave={() => setHoveredIndex(null)}
                     >
                         <svg viewBox='0 0 100 100' preserveAspectRatio='none' className='radio-chart'>
-                            <polyline className='radio-chart__raw-line' points={chartData.rawPoints} />
+                            <line className='radio-chart__avg-line' x1='0' y1={chartData.averageY} x2='100' y2={chartData.averageY} />
+                            <line className='radio-chart__median-line' x1='0' y1={chartData.medianY} x2='100' y2={chartData.medianY} />
                             <polyline className='radio-chart__line' points={chartData.points} />
-                            <polyline className='radio-chart__avg-line' points={chartData.averagePoints} />
-                            <polyline className='radio-chart__median-line' points={chartData.medianPoints} />
                             {hoveredPoint && (
                                 <>
                                     <line className='radio-chart__crosshair' x1={hoveredPoint.x} y1='0' x2={hoveredPoint.x} y2='100' />
@@ -433,13 +373,13 @@ export const RadioViewer = () => {
                                     <circle
                                         className={`radio-chart__focus-point radio-chart__focus-point--avg ${selectedSeries === 'average' ? 'is-selected' : ''}`}
                                         cx={hoveredPoint.x}
-                                        cy={hoveredAverageY}
+                                        cy={chartData.averageY}
                                         r='1.05'
                                     />
                                     <circle
                                         className={`radio-chart__focus-point radio-chart__focus-point--median ${selectedSeries === 'median' ? 'is-selected' : ''}`}
                                         cx={hoveredPoint.x}
-                                        cy={hoveredMedianY}
+                                        cy={chartData.medianY}
                                         r='1.05'
                                     />
                                 </>
@@ -454,10 +394,10 @@ export const RadioViewer = () => {
                                     Spectrum: {hoveredPoint.powerDb.toFixed(2)} dB
                                 </Typography>
                                 <Typography variant='caption' component='div'>
-                                    Average: {(hoveredAverage ?? chartData.mean).toFixed(2)} dB
+                                    Average: {chartData.mean.toFixed(2)} dB
                                 </Typography>
                                 <Typography variant='caption' component='div'>
-                                    Median: {(hoveredMedian ?? chartData.median).toFixed(2)} dB
+                                    Median: {chartData.median.toFixed(2)} dB
                                 </Typography>
                                 <Typography variant='caption' component='div'>
                                     Selected: {selectedSeries}
