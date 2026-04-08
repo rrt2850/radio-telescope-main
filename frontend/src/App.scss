@@ -144,24 +144,24 @@ body {
 
 .radio-chart__avg-line {
 	fill: none;
-	stroke: #ffca8a;
-	stroke-width: 1.35;
-	stroke-dasharray: 2 1.2;
+	stroke: #ffd9a8;
+	stroke-width: 1.95;
+	stroke-dasharray: 3 1.1;
 	stroke-linecap: round;
 	stroke-linejoin: round;
 	vector-effect: non-scaling-stroke;
-	filter: drop-shadow(0 0 4px rgba(247, 178, 103, 0.7));
+	filter: drop-shadow(0 0 5px rgba(247, 178, 103, 0.9));
 }
 
 .radio-chart__median-line {
 	fill: none;
-	stroke: #dbb2ff;
-	stroke-width: 1.35;
-	stroke-dasharray: 1.5 1.3;
+	stroke: #e5c6ff;
+	stroke-width: 1.95;
+	stroke-dasharray: 2.3 1.2;
 	stroke-linecap: round;
 	stroke-linejoin: round;
 	vector-effect: non-scaling-stroke;
-	filter: drop-shadow(0 0 4px rgba(199, 146, 234, 0.68));
+	filter: drop-shadow(0 0 5px rgba(199, 146, 234, 0.9));
 }
 
 .radio-chart__raw-line {
