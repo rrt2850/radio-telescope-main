@@ -187,7 +187,7 @@ def track(req: TrackRequest, backgroundTasks: BackgroundTasks):
 
 @app.get("/stars")
 def list_stars():
-    return {"groups": load_star_catalog()}
+    return {"stars": load_star_catalog()}
 
 
 @app.get("/radio")

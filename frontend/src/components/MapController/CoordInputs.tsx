@@ -1,5 +1,5 @@
-import React from 'react';
-import { ListSubheader, MenuItem, TextField } from '@mui/material';
+import React, { useMemo } from 'react';
+import { Autocomplete, TextField } from '@mui/material';
 import { CoordRow } from './CoordRow';
 
 type Star = {
@@ -9,11 +9,6 @@ type Star = {
     parallax_mas: number;
 };
 
-type StarGroup = {
-    group: string;
-    stars: Star[];
-};
-
 type CoordInputsProps = {
     coordMode: 'radec' | 'altaz';
     ra: string;
@@ -21,8 +16,8 @@ type CoordInputsProps = {
     alt: string;
     az: string;
     onChange: (field: 'ra' | 'dec' | 'alt' | 'az', value: string) => void;
-    starGroups: StarGroup[];
-    onSelectStar: (selectedKey: string) => void;
+    stars: Star[];
+    onSelectStar: (star: Star | null) => void;
 };
 
 export const CoordInputs = ({
@@ -32,32 +27,48 @@ export const CoordInputs = ({
     alt,
     az,
     onChange,
-    starGroups,
+    stars,
     onSelectStar,
-}: CoordInputsProps) =>
-    coordMode === 'radec' ? (
+}: CoordInputsProps) => {
+    const selectedStar = useMemo(
+        () => stars.find((star) => star.ra.toString() === ra && star.dec.toString() === dec) ?? null,
+        [stars, ra, dec],
+    );
+
+    return coordMode === 'radec' ? (
         <>
-            <TextField
-                select
-                label='Select a star'
+            <Autocomplete
+                options={stars}
+                value={selectedStar}
                 size='small'
-                defaultValue=''
-                onChange={(event) => onSelectStar(event.target.value)}
-                helperText='Grouped by estimated distance from parallax'
-            >
-                <MenuItem value=''>Choose a star…</MenuItem>
-                {starGroups.flatMap((group) => [
-                    <ListSubheader key={`${group.group}-header`}>{group.group}</ListSubheader>,
-                    ...group.stars.map((star) => (
-                        <MenuItem
-                            key={`${star.name}|${star.ra}|${star.dec}`}
-                            value={`${star.name}|${star.ra}|${star.dec}`}
-                        >
-                            {`${star.name} (RA ${star.ra.toFixed(3)}, Dec ${star.dec.toFixed(3)})`}
-                        </MenuItem>
-                    )),
-                ])}
-            </TextField>
+                onChange={(_, value) => onSelectStar(value)}
+                isOptionEqualToValue={(option, value) =>
+                    option.name === value.name && option.ra === value.ra && option.dec === value.dec
+                }
+                getOptionLabel={(option) => option.name}
+                filterOptions={(options, state) => {
+                    const input = state.inputValue.trim().toLowerCase();
+                    if (!input) {
+                        return options.slice(0, 200);
+                    }
+
+                    return options
+                        .filter((option) => option.name.toLowerCase().includes(input))
+                        .slice(0, 200);
+                }}
+                renderOption={(props, option) => (
+                    <li {...props} key={`${option.name}|${option.ra}|${option.dec}`}>
+                        {`${option.name} (RA ${option.ra.toFixed(3)}, Dec ${option.dec.toFixed(3)})`}
+                    </li>
+                )}
+                renderInput={(params) => (
+                    <TextField
+                        {...params}
+                        label='Search star catalog'
+                        helperText='Type to filter stars from data.csv'
+                    />
+                )}
+            />
             <CoordRow label='RA' value={ra} onChange={(v) => onChange('ra', v)} />
             <CoordRow label='Dec' value={dec} onChange={(v) => onChange('dec', v)} />
         </>
@@ -67,3 +78,4 @@ export const CoordInputs = ({
             <CoordRow label='Az' value={az} onChange={(v) => onChange('az', v)} />
         </>
     );
+};
