@@ -1,306 +1,178 @@
-import time
-import math
+#!/usr/bin/env python3
+"""
+Log ICM-20948 pointing direction relative to magnetic north.
+
+Requires:
+    pip3 install sparkfun-qwiic-icm20948
+
+Output:
+    heading_log.csv with:
+      timestamp_utc, heading_deg_magnetic, pitch_deg, roll_deg,
+      ax, ay, az, mx, my, mz
+
+Notes:
+- This computes MAGNETIC heading, not true heading.
+- For best results, calibrate the magnetometer offsets below.
+- Axis signs may need adjustment depending on how your board is mounted.
+"""
+
 import csv
-import board
-import adafruit_icm20x
-import json
+import math
+import signal
+import sys
+import time
+from datetime import datetime, timezone
+
+import qwiic_icm20948
 
 
-# ---------------------------
-# Hardware Init
-# ---------------------------
-i2c = board.I2C()
-imu = adafruit_icm20x.ICM20948(i2c)
+# ---------- User settings ----------
+LOG_FILE = "heading_log.csv"
+SAMPLE_HZ = 10.0  # log rate
+DECLINATION_DEG = 0.0  # keep 0.0 for magnetic north; set local declination for true north
+# Hard-iron calibration offsets for magnetometer raw counts.
+# Start with 0,0,0. After calibration, replace these with measured offsets.
+MAG_OFFSET_X = 0.0
+MAG_OFFSET_Y = 0.0
+MAG_OFFSET_Z = 0.0
+
+# Optional soft-iron scale correction. Leave as 1.0 until calibrated.
+MAG_SCALE_X = 1.0
+MAG_SCALE_Y = 1.0
+MAG_SCALE_Z = 1.0
+# ----------------------------------
 
 
-# ---------------------------
-# Constants
-# ---------------------------
-TIMESTEP = 0.02  # How often the loop runs in seconds
-
-# How much we trust gyro vs sensors
-AZIMUTH_GYRO_WEIGHT = 0.98
-ALTITUDE_GYRO_WEIGHT = 0.98
-
-# Magnetic declination (degrees) at the RIT observatory
-BASE_DECLINATION = -11.40
-YEARLY_CHANGE = 0.04  # degrees per year
-REFERENCE_YEAR = 2026
-
-# How much of the new acceleration do we use compared to the old one
-NEW_ACCELERATION_WEIGHT = 0.2
-
-# How often to read the magnetometer (it updates slower than the main loop)
-MAG_UPDATE_INTERVAL = 0.1  # seconds
-
-CAL_FILE = "mag_calibration.json"
+running = True
 
 
-# ---------------------------
-# Derived Values
-# ---------------------------
-currYear = time.localtime().tm_year
-DECLINATION = BASE_DECLINATION + (currYear - REFERENCE_YEAR) * YEARLY_CHANGE
+def handle_sigint(signum, frame):
+    global running
+    running = False
 
 
-# ---------------------------
-# Magnetometer Calibration
-# ---------------------------
-def calibrateMagnetometer(imu, duration=30):
-    print("\nMagnetometer Calibration:")
-    print("Rotate the sensor slowly in all orientations.")
-    print("Figure-8 motions help, try to avoid metal things lol")
-    input("Press ENTER to start calibration...")
-
-    minX = minY = minZ = float("inf")
-    maxX = maxY = maxZ = float("-inf")
-
-    start = time.time()
-
-    while time.time() - start < duration:
-        mx, my, mz = imu.magnetic
-
-        minX = min(minX, mx)
-        minY = min(minY, my)
-        minZ = min(minZ, mz)
-
-        maxX = max(maxX, mx)
-        maxY = max(maxY, my)
-        maxZ = max(maxZ, mz)
-
-        print(
-            f"\rCalibrating... {int(time.time() - start)}s "
-            f"X[{minX:.1f},{maxX:.1f}] "
-            f"Y[{minY:.1f},{maxY:.1f}] "
-            f"Z[{minZ:.1f},{maxZ:.1f}]",
-            end=""
-        )
-
-        time.sleep(0.05)
-
-    print("\nCalibration complete.")
-
-    # Hard-iron offset (center of min/max)
-    offsetX = (maxX + minX) / 2
-    offsetY = (maxY + minY) / 2
-    offsetZ = (maxZ + minZ) / 2
-
-    # Soft-iron scaling
-    rangeX = maxX - minX
-    rangeY = maxY - minY
-    rangeZ = maxZ - minZ
-    avgRange = (rangeX + rangeY + rangeZ) / 3
-
-    scaleX = avgRange / rangeX if rangeX != 0 else 1
-    scaleY = avgRange / rangeY if rangeY != 0 else 1
-    scaleZ = avgRange / rangeZ if rangeZ != 0 else 1
-
-    calibration = {
-        "offsetX": offsetX,
-        "offsetY": offsetY,
-        "offsetZ": offsetZ,
-        "scaleX": scaleX,
-        "scaleY": scaleY,
-        "scaleZ": scaleZ,
-    }
-
-    with open(CAL_FILE, "w") as f:
-        json.dump(calibration, f, indent=4)
-
-    print("\nSaved calibration:")
-    print(json.dumps(calibration, indent=4))
-
-    return calibration
+signal.signal(signal.SIGINT, handle_sigint)
+signal.signal(signal.SIGTERM, handle_sigint)
 
 
-def loadCalibration():
-    try:
-        with open(CAL_FILE, "r") as f:
-            print("Loaded magnetometer calibration.")
-            return json.load(f)
-    except:
-        print("No calibration file found, calibrating")
-        fart = calibrateMagnetometer(imu)
-        input("continue?")
-        return fart
-
-
-magCal = loadCalibration()
-
-
-# ---------------------------
-# Helpers
-# ---------------------------
-def constrain360(deg):
-    while deg >= 360:
-        deg -= 360
-    while deg < 0:
-        deg += 360
-    return deg
-
-
-def constrain180(deg):
-    while deg > 180:
-        deg -= 360
-    while deg < -180:
-        deg += 360
-    return deg
-
-
-def applyMagCal(mx, my, mz):
-    # Apply hard + soft iron correction
-    mx = (mx - magCal["offsetX"]) * magCal["scaleX"]
-    my = (my - magCal["offsetY"]) * magCal["scaleY"]
-    mz = (mz - magCal["offsetZ"]) * magCal["scaleZ"]
-    # Negate Y to compensate for AK09916 axis inversion inside ICM20948
-    my = -my
-    return mx, my, mz
-
-
-def altFromAccel(ax, ay, az):
-    # Using equation from Analog Devices app note
-    return math.degrees(math.atan2(-ax, math.sqrt(ay*ay + az*az)))
-
-
-def azFromMagTiltComp(mx, my, mz, ax, ay, az):
-    # Normalize accelerometer
-    norm = math.sqrt(ax*ax + ay*ay + az*az)
+def normalize(vx, vy, vz):
+    norm = math.sqrt(vx * vx + vy * vy + vz * vz)
     if norm == 0:
-        return 0
+        return 0.0, 0.0, 0.0
+    return vx / norm, vy / norm, vz / norm
 
-    ax /= norm
-    ay /= norm
-    az /= norm
 
-    # Pitch + roll
-    pitch = math.asin(-ax)
+def tilt_compensated_heading(ax, ay, az, mx, my, mz):
+    """
+    Returns:
+        heading_deg_magnetic, pitch_deg, roll_deg
+
+    Assumes:
+    - accelerometer gives gravity direction when device is not accelerating hard
+    - magnetometer is calibrated
+    """
+
+    # Normalize accelerometer and magnetometer
+    ax, ay, az = normalize(ax, ay, az)
+    mx, my, mz = normalize(mx, my, mz)
+
+    # Roll and pitch from accelerometer
     roll = math.atan2(ay, az)
+    pitch = math.atan2(-ax, math.sqrt(ay * ay + az * az))
 
     # Tilt compensation
-    mx2 = mx * math.cos(pitch) + mz * math.sin(pitch)
-    my2 = (
+    mx_comp = mx * math.cos(pitch) + mz * math.sin(pitch)
+    my_comp = (
         mx * math.sin(roll) * math.sin(pitch)
         + my * math.cos(roll)
         - mz * math.sin(roll) * math.cos(pitch)
     )
 
-    # Negated my2 per standard tilt-compensated heading formula
-    angle = math.degrees(math.atan2(-my2, mx2))
-    angle += DECLINATION
+    heading = math.atan2(-my_comp, mx_comp)  # sign may need flipping for your board
+    heading_deg = math.degrees(heading) + DECLINATION_DEG
 
-    return constrain360(angle)
+    # Wrap to [0, 360)
+    heading_deg %= 360.0
 
-
-# ---------------------------
-# Gyro Calibration
-# ---------------------------
-print("Keep telescope still for gyro calibration...")
-
-gyroXBias = gyroYBias = gyroZBias = 0
-numSamples = 300
-
-for _ in range(numSamples):
-    gx, gy, gz = imu.gyro
-    gyroXBias += gx
-    gyroYBias += gy
-    gyroZBias += gz
-    time.sleep(0.01)
-
-gyroXBias /= numSamples
-gyroYBias /= numSamples
-gyroZBias /= numSamples
-
-print("Gyro calibrated")
+    return heading_deg, math.degrees(pitch), math.degrees(roll)
 
 
-# ---------------------------
-# Initial Angles
-# ---------------------------
-ax, ay, az = imu.acceleration
-mx, my, mz = applyMagCal(*imu.magnetic)
+def main():
+    imu = qwiic_icm20948.QwiicIcm20948()
 
-currAlt = altFromAccel(ax, ay, az)
-currAz = azFromMagTiltComp(mx, my, mz, ax, ay, az)
+    if not imu.connected:
+        print("ICM-20948 not found. Check wiring and I2C.")
+        sys.exit(1)
 
-print("Starting angles:")
-print(f"Azimuth:  {currAz:.2f}°")
-print(f"Altitude: {currAlt:.2f}°")
+    if not imu.begin():
+        print("Failed to initialize ICM-20948.")
+        sys.exit(1)
+
+    period = 1.0 / SAMPLE_HZ
+
+    with open(LOG_FILE, "a", newline="") as f:
+        writer = csv.writer(f)
+
+        # Write header only if file is empty
+        if f.tell() == 0:
+            writer.writerow([
+                "timestamp_utc",
+                "heading_deg_magnetic",
+                "pitch_deg",
+                "roll_deg",
+                "ax_raw", "ay_raw", "az_raw",
+                "mx_raw_cal", "my_raw_cal", "mz_raw_cal",
+            ])
+
+        print(f"Logging to {LOG_FILE}. Press Ctrl+C to stop.")
+
+        while running:
+            loop_start = time.time()
+
+            if imu.dataReady():
+                ok = imu.getAgmt()
+                if not ok:
+                    print("Read failed.")
+                    time.sleep(period)
+                    continue
+
+                # Raw accelerometer counts
+                ax = float(imu.axRaw)
+                ay = float(imu.ayRaw)
+                az = float(imu.azRaw)
+
+                # Raw magnetometer counts with simple calibration
+                mx = (float(imu.mxRaw) - MAG_OFFSET_X) * MAG_SCALE_X
+                my = (float(imu.myRaw) - MAG_OFFSET_Y) * MAG_SCALE_Y
+                mz = (float(imu.mzRaw) - MAG_OFFSET_Z) * MAG_SCALE_Z
+
+                heading_deg, pitch_deg, roll_deg = tilt_compensated_heading(
+                    ax, ay, az, mx, my, mz
+                )
+
+                ts = datetime.now(timezone.utc).isoformat()
+
+                writer.writerow([
+                    ts,
+                    round(heading_deg, 2),
+                    round(pitch_deg, 2),
+                    round(roll_deg, 2),
+                    int(ax), int(ay), int(az),
+                    round(mx, 2), round(my, 2), round(mz, 2),
+                ])
+                f.flush()
+
+                print(
+                    f"{ts}  heading={heading_deg:7.2f}° magnetic   "
+                    f"pitch={pitch_deg:7.2f}°   roll={roll_deg:7.2f}°"
+                )
+
+            elapsed = time.time() - loop_start
+            if elapsed < period:
+                time.sleep(period - elapsed)
+
+    print("Stopped.")
 
 
-# ---------------------------
-# Logging
-# ---------------------------
-log = open("telescope_angles.csv", "w", newline="")
-writer = csv.writer(log)
-writer.writerow(["time", "azimuth", "altitude"])
-
-
-# ---------------------------
-# Main Loop
-# ---------------------------
-smoothedAX, smoothedAY, smoothedAZ = ax, ay, az
-azMag = currAz   # initialize so first loop iteration has a valid value
-altMag = currAlt
-
-prev = time.time()
-last_mag_update = 0
-
-try:
-    while True:
-        now = time.time()
-        dt = now - prev
-        prev = now
-
-        ax, ay, az = imu.acceleration
-        gx, gy, gz = imu.gyro
-
-        # Smooth accel (reduce noise)
-        smoothedAX = NEW_ACCELERATION_WEIGHT * ax + (1 - NEW_ACCELERATION_WEIGHT) * smoothedAX
-        smoothedAY = NEW_ACCELERATION_WEIGHT * ay + (1 - NEW_ACCELERATION_WEIGHT) * smoothedAY
-        smoothedAZ = NEW_ACCELERATION_WEIGHT * az + (1 - NEW_ACCELERATION_WEIGHT) * smoothedAZ
-
-        # Remove gyro bias
-        gx -= gyroXBias
-        gy -= gyroYBias
-        gz -= gyroZBias
-
-        # Only read the magnetometer at MAG_UPDATE_INTERVAL to avoid stale repeated reads
-        if now - last_mag_update >= MAG_UPDATE_INTERVAL:
-            mx, my, mz = applyMagCal(*imu.magnetic)
-            azMag  = azFromMagTiltComp(mx, my, mz, smoothedAX, smoothedAY, smoothedAZ)
-            altMag = altFromAccel(smoothedAX, smoothedAY, smoothedAZ)
-            last_mag_update = now
-
-        # Integrate gyro
-        azGyro  = currAz  + math.degrees(gz * dt)
-        altGyro = currAlt + math.degrees(gy * dt)
-
-        # Wraparound-safe azimuth error
-        azError = constrain180(azMag - azGyro)
-
-        # Complementary filter
-        currAz = constrain360(
-            azGyro + (1 - AZIMUTH_GYRO_WEIGHT) * azError
-        )
-        currAlt = (
-            ALTITUDE_GYRO_WEIGHT * altGyro +
-            (1 - ALTITUDE_GYRO_WEIGHT) * altMag
-        )
-
-        # Debug line — remove once you're happy it's working
-        print(
-            f"\r\033[K"
-            f"Az: {currAz:.2f}°  "
-            f"Alt: {currAlt:.2f}°  "
-            f"[mag az: {azMag:.1f}°  gyro az: {azGyro:.1f}°]",
-            end="", flush=True
-        )
-
-        writer.writerow([now, currAz, currAlt])
-        log.flush()
-
-        time.sleep(TIMESTEP)
-
-except KeyboardInterrupt:
-    print("\nStopped")
-    log.close()
+if __name__ == "__main__":
+    main()
