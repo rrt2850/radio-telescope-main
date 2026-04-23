@@ -1,4 +1,4 @@
-from fastapi import FastAPI, BackgroundTasks
+from fastapi import FastAPI, BackgroundTasks, Query
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, model_validator
@@ -10,7 +10,7 @@ from ArduinoController import ArduinoController
 import constants
 from tracking import IsTracking, StartTrackingBackground
 from radio_service import RadioDataService
-from star_catalog import load_star_catalog
+from star_catalog import load_star_catalog, get_star_catalog_page, search_star_catalog
 
 class PointRequest(BaseModel):
     ra: Optional[float] = None
@@ -186,8 +186,30 @@ def track(req: TrackRequest, backgroundTasks: BackgroundTasks):
 
 
 @app.get("/stars")
-def list_stars():
-    return {"stars": load_star_catalog()}
+def list_stars(
+    page: int | None = Query(default=None, ge=0),
+    page_size: int = Query(default=100, ge=1, le=500),
+):
+    if page is None:
+        return {"stars": load_star_catalog()}
+
+    return get_star_catalog_page(page=page, page_size=page_size)
+
+
+@app.get("/stars/page")
+def list_stars_page(
+    page: int = Query(default=0, ge=0),
+    page_size: int = Query(default=100, ge=1, le=500),
+):
+    return get_star_catalog_page(page=page, page_size=page_size)
+
+
+@app.get("/stars/search")
+def search_stars(
+    query: str = Query(min_length=1),
+    limit: int = Query(default=50, ge=1, le=200),
+):
+    return {"stars": search_star_catalog(query=query, limit=limit)}
 
 
 @app.get("/radio")

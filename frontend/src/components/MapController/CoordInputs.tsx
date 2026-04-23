@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { Autocomplete, TextField } from '@mui/material';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Autocomplete, Box, Button, CircularProgress, TextField, Typography } from '@mui/material';
 import { CoordRow } from './CoordRow';
 
 type Star = {
@@ -9,6 +9,8 @@ type Star = {
     parallax_mas: number;
 };
 
+const BROWSE_PAGE_SIZE = 100;
+
 type CoordInputsProps = {
     coordMode: 'radec' | 'altaz';
     ra: string;
@@ -16,7 +18,9 @@ type CoordInputsProps = {
     alt: string;
     az: string;
     onChange: (field: 'ra' | 'dec' | 'alt' | 'az', value: string) => void;
-    stars: Star[];
+    initialBrowseStars: Star[];
+    onLoadBrowsePage: (page: number, pageSize: number) => Promise<Star[]>;
+    onSearchStars: (query: string, limit?: number) => Promise<Star[]>;
     onSelectStar: (star: Star | null) => void;
 };
 
@@ -27,35 +31,92 @@ export const CoordInputs = ({
     alt,
     az,
     onChange,
-    stars,
+    initialBrowseStars,
+    onLoadBrowsePage,
+    onSearchStars,
     onSelectStar,
 }: CoordInputsProps) => {
+    const [inputValue, setInputValue] = useState('');
+    const [options, setOptions] = useState<Star[]>(initialBrowseStars);
+    const [isLoading, setIsLoading] = useState(false);
+    const [browsePage, setBrowsePage] = useState(0);
+    const [hasMoreBrowse, setHasMoreBrowse] = useState(true);
+    const [isSearchMode, setIsSearchMode] = useState(false);
+
+    useEffect(() => {
+        setOptions(initialBrowseStars);
+        setBrowsePage(0);
+        setHasMoreBrowse(initialBrowseStars.length >= BROWSE_PAGE_SIZE);
+    }, [initialBrowseStars]);
+
+    useEffect(() => {
+        const query = inputValue.trim();
+        const debounce = window.setTimeout(async () => {
+            if (!query) {
+                setIsSearchMode(false);
+                setOptions(initialBrowseStars);
+                setBrowsePage(0);
+                setHasMoreBrowse(initialBrowseStars.length >= BROWSE_PAGE_SIZE);
+                return;
+            }
+
+            try {
+                setIsLoading(true);
+                setIsSearchMode(true);
+                const results = await onSearchStars(query, 50);
+                setOptions(results);
+                setHasMoreBrowse(false);
+            } catch (error) {
+                console.error('Error searching star catalog:', error);
+                setOptions([]);
+            } finally {
+                setIsLoading(false);
+            }
+        }, 250);
+
+        return () => {
+            window.clearTimeout(debounce);
+        };
+    }, [inputValue, initialBrowseStars, onSearchStars]);
+
+    const loadMoreBrowse = async () => {
+        const nextPage = browsePage + 1;
+        try {
+            setIsLoading(true);
+            const nextStars = await onLoadBrowsePage(nextPage, BROWSE_PAGE_SIZE);
+            setOptions((prev) => [...prev, ...nextStars]);
+            setBrowsePage(nextPage);
+            if (nextStars.length < BROWSE_PAGE_SIZE) {
+                setHasMoreBrowse(false);
+            }
+        } catch (error) {
+            console.error('Error loading next star page:', error);
+            setHasMoreBrowse(false);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     const selectedStar = useMemo(
-        () => stars.find((star) => star.ra.toString() === ra && star.dec.toString() === dec) ?? null,
-        [stars, ra, dec],
+        () => options.find((star) => star.ra.toString() === ra && star.dec.toString() === dec) ?? null,
+        [options, ra, dec],
     );
 
     return coordMode === 'radec' ? (
         <>
             <Autocomplete
-                options={stars}
+                options={options}
                 value={selectedStar}
                 size='small'
                 onChange={(_, value) => onSelectStar(value)}
+                inputValue={inputValue}
+                onInputChange={(_, value) => setInputValue(value)}
                 isOptionEqualToValue={(option, value) =>
                     option.name === value.name && option.ra === value.ra && option.dec === value.dec
                 }
                 getOptionLabel={(option) => option.name}
-                filterOptions={(options, state) => {
-                    const input = state.inputValue.trim().toLowerCase();
-                    if (!input) {
-                        return options.slice(0, 200);
-                    }
-
-                    return options
-                        .filter((option) => option.name.toLowerCase().includes(input))
-                        .slice(0, 200);
-                }}
+                filterOptions={(x) => x}
+                loading={isLoading}
                 renderOption={(props, option) => (
                     <li {...props} key={`${option.name}|${option.ra}|${option.dec}`}>
                         {`${option.name} (RA ${option.ra.toFixed(3)}, Dec ${option.dec.toFixed(3)})`}
@@ -65,10 +126,29 @@ export const CoordInputs = ({
                     <TextField
                         {...params}
                         label='Search star catalog'
-                        helperText='Type to filter stars from data.csv'
+                        helperText={isSearchMode ? 'Searching full server catalog' : 'Browsing stars by page'}
+                        slotProps={{
+                            input: {
+                                ...params.InputProps,
+                                endAdornment: (
+                                    <>
+                                        {isLoading && <CircularProgress color='inherit' size={16} />}
+                                        {params.InputProps.endAdornment}
+                                    </>
+                                ),
+                            },
+                        }}
                     />
                 )}
             />
+            {!isSearchMode && (
+                <Box display='flex' justifyContent='space-between' alignItems='center' sx={{ mt: 0.5 }}>
+                    <Typography variant='caption'>Loaded {options.length} stars</Typography>
+                    <Button size='small' onClick={loadMoreBrowse} disabled={!hasMoreBrowse || isLoading}>
+                        {hasMoreBrowse ? 'Load more' : 'End of catalog'}
+                    </Button>
+                </Box>
+            )}
             <CoordRow label='RA' value={ra} onChange={(v) => onChange('ra', v)} />
             <CoordRow label='Dec' value={dec} onChange={(v) => onChange('dec', v)} />
         </>

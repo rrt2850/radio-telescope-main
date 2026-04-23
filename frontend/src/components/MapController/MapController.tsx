@@ -24,6 +24,7 @@ interface MapControllerProps {
 }
 
 const API_BASE_URL = 'https://spex-telescope-backend.online';
+const BROWSE_PAGE_SIZE = 100;
 
 export const MapController = ({ isTrackMode, onTrackModeChange }: MapControllerProps) => {
     const [ra, setRa] = useState('0');
@@ -31,24 +32,45 @@ export const MapController = ({ isTrackMode, onTrackModeChange }: MapControllerP
     const [az, setAz] = useState('0');
     const [alt, setAlt] = useState('0');
     const [coordMode, setCoordMode] = useState<'radec' | 'altaz'>('radec');
-    const [stars, setStars] = useState<Star[]>([]);
+    const [browseStars, setBrowseStars] = useState<Star[]>([]);
 
     const [duration, setDuration] = useState('60');
 
     const isRaDecMode = coordMode === 'radec';
-
     useEffect(() => {
-        const loadStars = async () => {
+        const loadInitialBrowsePage = async () => {
             try {
-                const response = await axios.get<{ stars: Star[] }>(`${API_BASE_URL}/stars`);
-                setStars(response.data.stars ?? []);
+                const response = await axios.get<{ stars: Star[] }>(`${API_BASE_URL}/stars/page`, {
+                    params: {
+                        page: 0,
+                        page_size: BROWSE_PAGE_SIZE,
+                    },
+                });
+                setBrowseStars(response.data.stars ?? []);
             } catch (error) {
                 console.error('Error loading star catalog:', error);
             }
         };
 
-        loadStars();
+        loadInitialBrowsePage();
     }, []);
+
+    const loadBrowsePage = async (page: number, pageSize: number) => {
+        const response = await axios.get<{ stars: Star[] }>(`${API_BASE_URL}/stars/page`, {
+            params: { page, page_size: pageSize },
+        });
+        return response.data.stars ?? [];
+    };
+
+    const searchStars = async (query: string, limit = 50) => {
+        if (!query.trim()) {
+            return [];
+        }
+        const response = await axios.get<{ stars: Star[] }>(`${API_BASE_URL}/stars/search`, {
+            params: { query, limit },
+        });
+        return response.data.stars ?? [];
+    };
 
     const buildPayload = () =>
         isRaDecMode
@@ -135,7 +157,9 @@ export const MapController = ({ isTrackMode, onTrackModeChange }: MapControllerP
                     alt={alt}
                     az={az}
                     onChange={handleChangeCoordinate}
-                    stars={stars}
+                    initialBrowseStars={browseStars}
+                    onLoadBrowsePage={loadBrowsePage}
+                    onSearchStars={searchStars}
                     onSelectStar={handleSelectStar}
                 />
                 {isTrackMode && isRaDecMode && (
