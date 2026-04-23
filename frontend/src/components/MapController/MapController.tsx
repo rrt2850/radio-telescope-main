@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Stack, Box, Button } from '@mui/material';
 import axios from 'axios';
 import { CoordInputs } from './CoordInputs';
@@ -18,11 +18,6 @@ type Star = {
     parallax_mas: number;
 };
 
-type StarGroup = {
-    group: string;
-    stars: Star[];
-};
-
 interface MapControllerProps {
     isTrackMode: boolean;
     onTrackModeChange: (enabled: boolean) => void;
@@ -36,7 +31,7 @@ export const MapController = ({ isTrackMode, onTrackModeChange }: MapControllerP
     const [az, setAz] = useState('0');
     const [alt, setAlt] = useState('0');
     const [coordMode, setCoordMode] = useState<'radec' | 'altaz'>('radec');
-    const [starGroups, setStarGroups] = useState<StarGroup[]>([]);
+    const [stars, setStars] = useState<Star[]>([]);
 
     const [duration, setDuration] = useState('60');
 
@@ -45,8 +40,8 @@ export const MapController = ({ isTrackMode, onTrackModeChange }: MapControllerP
     useEffect(() => {
         const loadStars = async () => {
             try {
-                const response = await axios.get<{ groups: StarGroup[] }>(`${API_BASE_URL}/stars`);
-                setStarGroups(response.data.groups ?? []);
+                const response = await axios.get<{ stars: Star[] }>(`${API_BASE_URL}/stars`);
+                setStars(response.data.stars ?? []);
             } catch (error) {
                 console.error('Error loading star catalog:', error);
             }
@@ -54,14 +49,6 @@ export const MapController = ({ isTrackMode, onTrackModeChange }: MapControllerP
 
         loadStars();
     }, []);
-
-    const starLookup = useMemo(() => {
-        const entries = starGroups.flatMap((group) =>
-            group.stars.map((star) => [`${star.name}|${star.ra}|${star.dec}`, star] as const)
-        );
-
-        return new Map(entries);
-    }, [starGroups]);
 
     const buildPayload = () =>
         isRaDecMode
@@ -119,9 +106,7 @@ export const MapController = ({ isTrackMode, onTrackModeChange }: MapControllerP
         }
     };
 
-    const handleSelectStar = (selectedKey: string) => {
-        const selectedStar = starLookup.get(selectedKey);
-
+    const handleSelectStar = (selectedStar: Star | null) => {
         if (!selectedStar) {
             return;
         }
@@ -150,7 +135,7 @@ export const MapController = ({ isTrackMode, onTrackModeChange }: MapControllerP
                     alt={alt}
                     az={az}
                     onChange={handleChangeCoordinate}
-                    starGroups={starGroups}
+                    stars={stars}
                     onSelectStar={handleSelectStar}
                 />
                 {isTrackMode && isRaDecMode && (
