@@ -130,6 +130,8 @@ export const MapController = ({ isTrackMode, onTrackModeChange }: MapControllerP
 
     const handleSelectStar = (selectedStar: Star | null) => {
         if (!selectedStar) {
+            setRa('');
+            setDec('');
             return;
         }
 
