@@ -12,6 +12,7 @@ from tracking import IsTracking, StartTrackingBackground
 from radio_service import RadioDataService
 from star_catalog import load_star_catalog, get_star_catalog_page, search_star_catalog
 
+
 class PointRequest(BaseModel):
     ra: Optional[float] = None
     dec: Optional[float] = None
@@ -28,13 +29,16 @@ class PointRequest(BaseModel):
             return values
         elif (az is not None and alt is not None) and (ra is None and dec is None):
             return values
-        raise ValueError("Must provide either (ra, dec) or (az, alt), but not both. Also don't send them as tuples, I just grouped them to make this easier to read")
 
+        raise ValueError(
+            "Must provide either (ra, dec) or (az, alt), but not both. "
+            "Also don't send them as tuples, I just grouped them to make this easier to read"
+        )
 
 
 class TrackRequest(PointRequest):
-    # total tracking time in seconds
-    duration: int
+    duration: int  # total tracking time in seconds
+
 
 class RadioConfigRequest(BaseModel):
     record_mode: Optional[str] = None
@@ -43,6 +47,7 @@ class RadioConfigRequest(BaseModel):
     bandwidth_hz: Optional[float] = None
     gain: Optional[str] = None
     n_ave: Optional[int] = None
+
 
 app = FastAPI(title="Radio Telescope Control API")
 
@@ -85,7 +90,6 @@ def shutdown():
 
 @app.post("/point")
 def point(req: PointRequest):
-    # Do not interrupt tracking
     if IsTracking():
         return JSONResponse(
             status_code=409,
@@ -105,11 +109,20 @@ def point(req: PointRequest):
 
     try:
         if req.ra is not None and req.dec is not None:
-            az, alt = CoordsTo(constants.LAT, constants.LONG, constants.HEIGHT, req.ra, req.dec)
+            az, alt = CoordsTo(
+                constants.LAT,
+                constants.LONG,
+                constants.HEIGHT,
+                req.ra,
+                req.dec,
+            )
         else:
             az, alt = req.az, req.alt
     except Exception as e:
-        return JSONResponse(status_code=500, content={"error": "Coordinate error", "detail": str(e)})
+        return JSONResponse(
+            status_code=500,
+            content={"error": "Coordinate error", "detail": str(e)},
+        )
 
     if alt < constants.MIN_ANGLE:
         return JSONResponse(
@@ -136,13 +149,12 @@ def point(req: PointRequest):
 
 @app.post("/track")
 def track(req: TrackRequest, backgroundTasks: BackgroundTasks):
-    # Basic validation
     if req.duration <= 0:
         return JSONResponse(
             status_code=400,
             content={"error": "duration must be positive (seconds)."},
         )
-    
+
     try:
         StartTrackingBackground(
             backgroundTasks=backgroundTasks,
@@ -154,20 +166,18 @@ def track(req: TrackRequest, backgroundTasks: BackgroundTasks):
     except Exception as e:
         msg = str(e).lower()
 
-        # TODO: do this smarter
-        # Decode known failure reasons by message
         if "already in progress" in msg:
             return JSONResponse(
                 status_code=409,
                 content={"error": msg},
             )
+
         if "not connected" in msg:
             return JSONResponse(
                 status_code=500,
                 content={"error": msg},
             )
 
-        # Fallback for any other startup failure
         return JSONResponse(
             status_code=500,
             content={
@@ -184,10 +194,9 @@ def track(req: TrackRequest, backgroundTasks: BackgroundTasks):
     }
 
 
-
 @app.get("/stars")
 def list_stars(
-    page: int | None = Query(default=None, ge=0),
+    page: Optional[int] = Query(default=None, ge=0),
     page_size: int = Query(default=100, ge=1, le=500),
 ):
     if page is None:

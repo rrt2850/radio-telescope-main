@@ -145,59 +145,31 @@ def forward_unit_vector():
 
 
 def tilt_compensated_heading(ax, ay, az, mx, my, mz):
-    """
-    Returns:
-        heading_deg_magnetic, pitch_deg, roll_deg
+    a_body = remap_axes((ax, ay, az))
+    m_body = remap_axes((mx, my, mz))
 
-    Method:
-    - Normalize gravity and magnetic field vectors in body frame
-    - Build horizontal east/north basis vectors
-    - Compute heading of the chosen forward axis in that horizontal plane
+    # Use DOWN from accelerometer, then define UP
+    down = normalize3(a_body)
+    up = (-down[0], -down[1], -down[2])
 
-    This is more robust than computing roll/pitch first and then plugging into a
-    formula that assumes a particular sensor axis convention.
-    """
+    m = normalize3(m_body)
 
-    # Raw vectors
-    a_raw = (ax, ay, az)
-    m_raw = (mx, my, mz)
-
-    # Remap into body frame
-    a_body = remap_axes(a_raw)
-    m_body = remap_axes(m_raw)
-
-    # Normalize
-    g = normalize3(a_body)   # gravity direction in body frame
-    m = normalize3(m_body)   # magnetic field direction in body frame
-
-    # Build local horizontal basis
-    # east = m x g
-    east = normalize3(cross(m, g))
-
-    # If east is zero, vectors are degenerate
+    east = normalize3(cross(m, up))
     if east == (0.0, 0.0, 0.0):
         return float("nan"), float("nan"), float("nan")
 
-    # north = g x east
-    north = normalize3(cross(g, east))
+    north = normalize3(cross(up, east))
 
     fwd = forward_unit_vector()
 
-    # Heading of forward axis in local horizontal plane
     heading_rad = math.atan2(dot(fwd, east), dot(fwd, north))
     heading_deg = (math.degrees(heading_rad) + DECLINATION_DEG) % 360.0
 
-    # Diagnostic pitch and roll in body frame
-    # Assumes body Z is "up" in your chosen frame convention.
-    gx, gy, gz = g
-    pitch_rad = math.atan2(-gx, math.sqrt(gy * gy + gz * gz))
-    roll_rad = math.atan2(gy, gz)
+    ux, uy, uz = up
+    pitch_rad = math.atan2(-ux, math.sqrt(uy * uy + uz * uz))
+    roll_rad = math.atan2(uy, uz)
 
-    pitch_deg = math.degrees(pitch_rad)
-    roll_deg = math.degrees(roll_rad)
-
-    return heading_deg, pitch_deg, roll_deg
-
+    return heading_deg, math.degrees(pitch_rad), math.degrees(roll_rad)
 
 def main():
     imu = qwiic_icm20948.QwiicIcm20948()
