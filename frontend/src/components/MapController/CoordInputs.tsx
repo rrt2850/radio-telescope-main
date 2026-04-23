@@ -110,7 +110,12 @@ export const CoordInputs = ({
                 size='small'
                 onChange={(_, value) => onSelectStar(value)}
                 inputValue={inputValue}
-                onInputChange={(_, value) => setInputValue(value)}
+                onInputChange={(_, value, reason) => {
+                    setInputValue(value);
+                    if (reason === 'clear' || (reason === 'input' && selectedStar)) {
+                        onSelectStar(null);
+                    }
+                }}
                 isOptionEqualToValue={(option, value) =>
                     option.name === value.name && option.ra === value.ra && option.dec === value.dec
                 }
