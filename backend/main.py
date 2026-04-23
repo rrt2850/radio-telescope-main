@@ -10,6 +10,7 @@ from ArduinoController import ArduinoController
 import constants
 from tracking import IsTracking, StartTrackingBackground
 from radio_service import RadioDataService
+from star_catalog import load_star_catalog
 
 class PointRequest(BaseModel):
     ra: Optional[float] = None
@@ -181,6 +182,12 @@ def track(req: TrackRequest, backgroundTasks: BackgroundTasks):
         "dec": req.dec,
         "duration": req.duration,
     }
+
+
+
+@app.get("/stars")
+def list_stars():
+    return {"groups": load_star_catalog()}
 
 
 @app.get("/radio")
