@@ -43,6 +43,9 @@ During startup the app attempts to connect to the Arduino and will log a warning
   - Body: `{ "ra": float, "dec": float, "duration": int }`
   - Starts background tracking for the given duration (seconds). Returns `409` if tracking is already in progress or `500` if the Arduino is unavailable.
 
+- `GET /stars`
+  - Returns star catalog entries from `data.csv`, grouped by approximate distance (derived from parallax) for dropdown-friendly display in the frontend.
+
 ### Operational Notes
 
 - Coordinate conversion and elevation bounds are defined in `constants.py` and `robutils.py`.
