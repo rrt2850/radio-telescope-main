@@ -88,7 +88,9 @@ def tilt_compensated_heading(ax, ay, az, mx, my, mz):
         - mz * math.sin(roll) * math.cos(pitch)
     )
 
-    heading = math.atan2(-my_comp, mx_comp)  # sign may need flipping for your board
+
+    #heading = math.atan2(-my_comp, mx_comp)  # sign may need flipping
+    heading = math.degrees(math.atan2(my, mx)) % 360.0
     heading_deg = math.degrees(heading) + DECLINATION_DEG
 
     # Wrap to [0, 360)
