@@ -126,7 +126,7 @@ export const CoordInputs = ({
                     <TextField
                         {...params}
                         label='Search star catalog'
-                        helperText={isSearchMode ? 'Searching full server catalog' : 'Browsing stars by page'}
+                        helperText={isSearchMode ? 'Searching full server catalog' : 'Viewing stars in batches'}
                         slotProps={{
                             input: {
                                 ...params.InputProps,

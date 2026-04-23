@@ -1,263 +1,228 @@
 #!/usr/bin/env python3
-"""
-Log ICM-20948 pointing direction relative to magnetic north.
-
-Requires:
-    pip3 install sparkfun-qwiic-icm20948
-
-Output:
-    heading_log.csv with:
-      timestamp_utc, heading_deg_magnetic, pitch_deg, roll_deg,
-      ax, ay, az, mx, my, mz
-
-Notes:
-- This computes MAGNETIC heading, not true heading.
-- For best results, calibrate the magnetometer offsets below.
-- This version uses gravity + magnetic field vectors directly for tilt compensation.
-- You may need to change AXIS_MAP_* and FORWARD_AXIS depending on mounting.
-"""
-
-import csv
 import math
-import signal
-import sys
 import time
-from datetime import datetime, timezone
+import sys
 
 import qwiic_icm20948
 
 
-# ---------- User settings ----------
-LOG_FILE = "heading_log.csv"
-SAMPLE_HZ = 10.0
-DECLINATION_DEG = 0.0  # 0.0 for magnetic north; set local declination for true north
+# ---------------------------
+# Vector helpers
+# ---------------------------
+def dot(a, b):
+    return a[0]*b[0] + a[1]*b[1] + a[2]*b[2]
 
-# Hard-iron calibration offsets for magnetometer raw counts
+def norm(v):
+    return math.sqrt(dot(v, v))
+
+def normalize(v):
+    n = norm(v)
+    if n < 1e-12:
+        return None
+    return (v[0]/n, v[1]/n, v[2]/n)
+
+def sub(a, b):
+    return (a[0]-b[0], a[1]-b[1], a[2]-b[2])
+
+def mul(v, s):
+    return (v[0]*s, v[1]*s, v[2]*s)
+
+def cross(a, b):
+    return (
+        a[1]*b[2] - a[2]*b[1],
+        a[2]*b[0] - a[0]*b[2],
+        a[0]*b[1] - a[1]*b[0],
+    )
+
+def clamp_angle_deg(deg):
+    return deg % 360.0
+
+
+# ---------------------------
+# User-tunable calibration
+# ---------------------------
+# Replace these with your own hard-iron offsets after calibration.
+# Start with zeros if you haven't calibrated yet.
 MAG_OFFSET_X = 0.0
 MAG_OFFSET_Y = 0.0
 MAG_OFFSET_Z = 0.0
 
-# Optional soft-iron scale correction
+# Optional soft-iron scaling. Leave at 1.0 if you don't have it yet.
 MAG_SCALE_X = 1.0
 MAG_SCALE_Y = 1.0
 MAG_SCALE_Z = 1.0
 
-# Axis remap from raw sensor frame to your desired body frame.
-# Each entry is one of: "x", "-x", "y", "-y", "z", "-z"
-#
-# These define:
-#   body_x = chosen raw axis
-#   body_y = chosen raw axis
-#   body_z = chosen raw axis
-#
-# Start with identity. If heading behaves oddly, adjust these to match your mount.
-AXIS_MAP_X = "x"
-AXIS_MAP_Y = "y"
-AXIS_MAP_Z = "z"
+# Local magnetic declination in degrees.
+# Example: +10.5 means magnetic north is 10.5° west/east depending on local convention.
+# Set this to 0.0 if you only want magnetic heading.
+MAG_DECLINATION_DEG = 0.0
 
-# Which BODY axis points forward in the final installation?
-# Usually this is "x" after remapping, but can be "-x", "y", "-y", "z", "-z".
-FORWARD_AXIS = "x"
-# ----------------------------------
+# Exponential smoothing for heading display
+HEADING_ALPHA = 0.2   # 0..1 ; larger = more responsive, smaller = smoother
 
-
-running = True
-
-
-def handle_sigint(signum, frame):
-    global running
-    running = False
-
-
-signal.signal(signal.SIGINT, handle_sigint)
-signal.signal(signal.SIGTERM, handle_sigint)
-
-
-def normalize3(v):
-    x, y, z = v
-    n = math.sqrt(x * x + y * y + z * z)
-    if n == 0.0:
-        return (0.0, 0.0, 0.0)
-    return (x / n, y / n, z / n)
-
-
-def dot(a, b):
-    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
-
-
-def cross(a, b):
-    return (
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-    )
-
-
-def clamp(v, lo, hi):
-    return max(lo, min(hi, v))
-
-
-def get_axis_component(v, axis_name):
-    x, y, z = v
-    if axis_name == "x":
-        return x
-    if axis_name == "-x":
-        return -x
-    if axis_name == "y":
-        return y
-    if axis_name == "-y":
-        return -y
-    if axis_name == "z":
-        return z
-    if axis_name == "-z":
-        return -z
-    raise ValueError(f"Invalid axis specifier: {axis_name}")
-
-
-def remap_axes(v):
+# If your installation flips signs or swaps axes, change this mapping.
+# The SparkFun library updates raw instance vars axRaw..mzRaw after getAgmt(). :contentReference[oaicite:1]{index=1}
+def read_body_accel_and_mag(imu):
     """
-    Remap raw sensor vector into body-frame vector.
+    Return accel and mag as body-frame tuples: (x, y, z)
+
+    Adjust signs/swaps here to match your physical mounting.
     """
-    return (
-        get_axis_component(v, AXIS_MAP_X),
-        get_axis_component(v, AXIS_MAP_Y),
-        get_axis_component(v, AXIS_MAP_Z),
-    )
+    # Raw values from the SparkFun driver:
+    ax, ay, az = float(imu.axRaw), float(imu.ayRaw), float(imu.azRaw)
+    mx, my, mz = float(imu.mxRaw), float(imu.myRaw), float(imu.mzRaw)
+
+    # --- Magnetometer calibration ---
+    mx = (mx - MAG_OFFSET_X) * MAG_SCALE_X
+    my = (my - MAG_OFFSET_Y) * MAG_SCALE_Y
+    mz = (mz - MAG_OFFSET_Z) * MAG_SCALE_Z
+
+    # --- Axis mapping hook ---
+    # Change these if your mounting orientation is different.
+    accel = (ax, ay, az)
+    mag   = (mx, my, mz)
+
+    return accel, mag
 
 
-def forward_unit_vector():
+def tilt_compensated_heading(accel, mag):
     """
-    Returns the body-frame unit vector that points forward.
+    Compute heading using:
+      1) accelerometer -> up/down direction
+      2) magnetometer projected into horizontal plane
+
+    Returns:
+      heading_deg_true_or_magnetic, up_unit, north_horizontal_unit, east_unit
     """
-    if FORWARD_AXIS == "x":
-        return (1.0, 0.0, 0.0)
-    if FORWARD_AXIS == "-x":
-        return (-1.0, 0.0, 0.0)
-    if FORWARD_AXIS == "y":
-        return (0.0, 1.0, 0.0)
-    if FORWARD_AXIS == "-y":
-        return (0.0, -1.0, 0.0)
-    if FORWARD_AXIS == "z":
-        return (0.0, 0.0, 1.0)
-    if FORWARD_AXIS == "-z":
-        return (0.0, 0.0, -1.0)
-    raise ValueError(f"Invalid FORWARD_AXIS: {FORWARD_AXIS}")
+
+    # Accelerometer at rest measures gravity.
+    # Often "down" points in the direction of +accel, so "up" is -accel.
+    # If your pitch appears inverted, switch this sign.
+    up = normalize((-accel[0], -accel[1], -accel[2]))
+    if up is None:
+        return None, None, None, None
+
+    # Project magnetic field into horizontal plane:
+    # mh = m - (m·up) up
+    vertical_component = mul(up, dot(mag, up))
+    mh = sub(mag, vertical_component)
+    north_h = normalize(mh)
+    if north_h is None:
+        return None, up, None, None
+
+    # Create a horizontal east vector
+    east = normalize(cross(up, north_h))
+    if east is None:
+        return None, up, north_h, None
+
+    # Re-orthogonalize north to keep basis tidy
+    north_h = normalize(cross(east, up))
+    if north_h is None:
+        return None, up, None, east
+
+    # Heading relative to body X axis projected into horizontal plane.
+    # Assumes your "forward" direction is the sensor/body +X axis.
+    # If your forward axis is +Y instead, swap body_forward accordingly.
+    body_forward = (1.0, 0.0, 0.0)
+
+    # Remove any vertical component from body forward too
+    bf_h = sub(body_forward, mul(up, dot(body_forward, up)))
+    bf_h = normalize(bf_h)
+    if bf_h is None:
+        return None, up, north_h, east
+
+    # atan2(east component, north component)
+    x_east = dot(bf_h, east)
+    y_north = dot(bf_h, north_h)
+
+    heading_deg = math.degrees(math.atan2(x_east, y_north))
+    heading_deg = clamp_angle_deg(heading_deg + MAG_DECLINATION_DEG)
+
+    return heading_deg, up, north_h, east
 
 
-def tilt_compensated_heading(ax, ay, az, mx, my, mz):
-    a_body = remap_axes((ax, ay, az))
-    m_body = remap_axes((mx, my, mz))
+def simple_pitch_from_accel(accel):
+    """
+    Simple pitch estimate.
+    This definition assumes body X is forward and Z/Y follow a common IMU convention.
+    You may need to change this for your mount.
+    """
+    ax, ay, az = accel
+    return math.degrees(math.atan2(ax, math.sqrt(ay*ay + az*az)))
 
-    # Use DOWN from accelerometer, then define UP
-    down = normalize3(a_body)
-    up = (-down[0], -down[1], -down[2])
 
-    m = normalize3(m_body)
+def simple_roll_from_accel(accel):
+    ax, ay, az = accel
+    return math.degrees(math.atan2(ay, math.sqrt(ax*ax + az*az)))
 
-    east = normalize3(cross(m, up))
-    if east == (0.0, 0.0, 0.0):
-        return float("nan"), float("nan"), float("nan")
-
-    north = normalize3(cross(up, east))
-
-    fwd = forward_unit_vector()
-
-    heading_rad = math.atan2(dot(fwd, east), dot(fwd, north))
-    heading_deg = (math.degrees(heading_rad) + DECLINATION_DEG) % 360.0
-
-    ux, uy, uz = up
-    pitch_rad = math.atan2(-ux, math.sqrt(uy * uy + uz * uz))
-    roll_rad = math.atan2(uy, uz)
-
-    return heading_deg, math.degrees(pitch_rad), math.degrees(roll_rad)
 
 def main():
+    print("\nSparkFun ICM-20948 tilt-compensated heading example\n")
+
     imu = qwiic_icm20948.QwiicIcm20948()
 
     if not imu.connected:
-        print("ICM-20948 not found. Check wiring and I2C.")
+        print("The Qwiic ICM20948 device isn't connected. Check wiring/power.", file=sys.stderr)
         sys.exit(1)
 
     if not imu.begin():
-        print("Failed to initialize ICM-20948.")
+        print("IMU.begin() failed.", file=sys.stderr)
         sys.exit(1)
 
-    period = 1.0 / SAMPLE_HZ
+    print("Started. Press Ctrl+C to stop.\n")
 
-    with open(LOG_FILE, "a", newline="") as f:
-        writer = csv.writer(f)
+    filtered_heading = None
 
-        if f.tell() == 0:
-            writer.writerow([
-                "timestamp_utc",
-                "heading_deg_magnetic",
-                "pitch_deg",
-                "roll_deg",
-                "ax_body", "ay_body", "az_body",
-                "mx_body_cal", "my_body_cal", "mz_body_cal",
-            ])
-
-        print(f"Logging to {LOG_FILE}. Press Ctrl+C to stop.")
-        print(f"Axis remap: X={AXIS_MAP_X}, Y={AXIS_MAP_Y}, Z={AXIS_MAP_Z}")
-        print(f"Forward axis: {FORWARD_AXIS}")
-
-        while running:
-            loop_start = time.time()
-
+    try:
+        while True:
             if imu.dataReady():
-                ok = imu.getAgmt()
-                if not ok:
-                    print("Read failed.")
-                    time.sleep(period)
+                # SparkFun example/API says getAgmt() updates axRaw..mzRaw instance vars. :contentReference[oaicite:2]{index=2}
+                if not imu.getAgmt():
+                    time.sleep(0.01)
                     continue
 
-                # Raw accelerometer counts
-                ax_raw = float(imu.axRaw)
-                ay_raw = float(imu.ayRaw)
-                az_raw = float(imu.azRaw)
+                accel, mag = read_body_accel_and_mag(imu)
 
-                # Raw magnetometer counts with simple calibration
-                mx_raw = (float(imu.mxRaw) - MAG_OFFSET_X) * MAG_SCALE_X
-                my_raw = (float(imu.myRaw) - MAG_OFFSET_Y) * MAG_SCALE_Y
-                mz_raw = (float(imu.mzRaw) - MAG_OFFSET_Z) * MAG_SCALE_Z
+                heading_deg, up, north_h, east = tilt_compensated_heading(accel, mag)
 
-                # Remap for logging consistency
-                ax_body, ay_body, az_body = remap_axes((ax_raw, ay_raw, az_raw))
-                mx_body, my_body, mz_body = remap_axes((mx_raw, my_raw, mz_raw))
+                pitch_deg = simple_pitch_from_accel(accel)
+                roll_deg = simple_roll_from_accel(accel)
 
-                heading_deg, pitch_deg, roll_deg = tilt_compensated_heading(
-                    ax_raw, ay_raw, az_raw, mx_raw, my_raw, mz_raw
+                if heading_deg is not None:
+                    if filtered_heading is None:
+                        filtered_heading = heading_deg
+                    else:
+                        # unwrap for smoothing across 0/360
+                        delta = heading_deg - filtered_heading
+                        if delta > 180:
+                            delta -= 360
+                        elif delta < -180:
+                            delta += 360
+                        filtered_heading = clamp_angle_deg(filtered_heading + HEADING_ALPHA * delta)
+
+                print(
+                    f"Accel(raw): "
+                    f"ax={imu.axRaw:7d} ay={imu.ayRaw:7d} az={imu.azRaw:7d}   "
+                    f"Mag(raw): "
+                    f"mx={imu.mxRaw:7d} my={imu.myRaw:7d} mz={imu.mzRaw:7d}"
                 )
 
-                ts = datetime.now(timezone.utc).isoformat()
-
-                writer.writerow([
-                    ts,
-                    round(heading_deg, 2) if not math.isnan(heading_deg) else "",
-                    round(pitch_deg, 2) if not math.isnan(pitch_deg) else "",
-                    round(roll_deg, 2) if not math.isnan(roll_deg) else "",
-                    round(ax_body, 2),
-                    round(ay_body, 2),
-                    round(az_body, 2),
-                    round(mx_body, 2),
-                    round(my_body, 2),
-                    round(mz_body, 2),
-                ])
-                f.flush()
-
-                if math.isnan(heading_deg):
-                    print(f"{ts}  heading=NaN   pitch=NaN   roll=NaN")
+                if heading_deg is None:
+                    print("Heading: unavailable")
                 else:
                     print(
-                        f"{ts}  heading={heading_deg:7.2f}° magnetic   "
-                        f"pitch={pitch_deg:7.2f}°   roll={roll_deg:7.2f}°"
+                        f"Pitch={pitch_deg:7.2f} deg   "
+                        f"Roll={roll_deg:7.2f} deg   "
+                        f"Heading={heading_deg:7.2f} deg   "
+                        f"Filtered={filtered_heading:7.2f} deg"
                     )
 
-            elapsed = time.time() - loop_start
-            if elapsed < period:
-                time.sleep(period - elapsed)
+                print("-" * 90)
 
-    print("Stopped.")
+            time.sleep(0.05)
+
+    except KeyboardInterrupt:
+        print("\nStopped.")
 
 
 if __name__ == "__main__":
