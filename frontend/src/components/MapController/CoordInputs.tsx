@@ -112,7 +112,7 @@ export const CoordInputs = ({
                 inputValue={inputValue}
                 onInputChange={(_, value, reason) => {
                     setInputValue(value);
-                    if (reason === 'clear' || (reason === 'input' && selectedStar)) {
+                    if (reason === 'clear') {
                         onSelectStar(null);
                     }
                 }}
