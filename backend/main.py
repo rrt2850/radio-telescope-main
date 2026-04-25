@@ -278,24 +278,3 @@ def restart_radio_averaging():
     radio_service.restart_averaging()
     return radio_service.get_payload()
 
-
-@app.get("/pointing/current")
-def current_pointing():
-    if not arduino.IsConnected():
-        return JSONResponse(
-            status_code=503,
-            content={"error": "Arduino not connected"},
-        )
-
-    try:
-        return arduino.GetCurrentPointing()
-    except TimeoutError as exc:
-        return JSONResponse(
-            status_code=504,
-            content={"error": "Timed out requesting current pointing", "detail": str(exc)},
-        )
-    except Exception as exc:
-        return JSONResponse(
-            status_code=500,
-            content={"error": "Failed to read current pointing", "detail": str(exc)},
-        )
