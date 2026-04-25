@@ -289,6 +289,18 @@ export const RadioViewer = () => {
         }
     };
 
+    const restartAveraging = async () => {
+        setIsSavingMode(true);
+        try {
+            const response = await axios.post<RadioPayload>(`${RADIO_ENDPOINT}/restart-average`);
+            setPayload(response.data);
+        } catch (error) {
+            console.error('Failed to restart averaging', error);
+        } finally {
+            setIsSavingMode(false);
+        }
+    };
+
     return (
         <Box className='radio-viewer'>
             <Typography variant='h6'>Radio Viewer</Typography>
@@ -326,6 +338,9 @@ export const RadioViewer = () => {
                 </TextField>
                 <Button variant='outlined' size='small' disabled={isSavingMode} onClick={captureCold}>
                     Save Cold Profile
+                </Button>
+                <Button variant='outlined' size='small' disabled={isSavingMode} onClick={restartAveraging}>
+                    Restart Averaging
                 </Button>
             </Box>
             <Box display='flex' gap={1} mt={1} mb={1} flexWrap='wrap'>

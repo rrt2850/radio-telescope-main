@@ -273,6 +273,12 @@ def capture_radio_cold_profile():
     return radio_service.get_payload()
 
 
+@app.post("/radio/restart-average")
+def restart_radio_averaging():
+    radio_service.restart_averaging()
+    return radio_service.get_payload()
+
+
 @app.get("/pointing/current")
 def current_pointing():
     if not arduino.IsConnected():
