@@ -64,7 +64,7 @@ void setup() {
   
   // Azimuth setup routine
   azStepper.setMaxSpeed(300);
-  azStepper.setAcceleration(5);
+  azStepper.setAcceleration(10);
   azStepper.setCurrentPosition(0); // Boot position is 0 deg Azimuth, pointed north (ideally)
   azStepper.setPinsInverted(true); // Invert direction pin, necessary to rotate the stepper in correct direction
   // stepperCurrentLimit = 4.5 A - set this manually using the switches on the driver
