@@ -36,14 +36,14 @@ def runExample():
             )
 
             if line != prev_line:
-                sys.stdout.write("\033[0G\033[2K" + line)
+                sys.stdout.write("\r" + line)
                 sys.stdout.flush()
                 prev_line = line
 
             time.sleep(0.03)
 
         else:
-            sys.stdout.write("\033[0G\033[2KWaiting for data")
+            sys.stdout.write("\rWaiting for data          ")
             sys.stdout.flush()
             time.sleep(0.5)
 
