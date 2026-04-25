@@ -37,6 +37,7 @@ export const CoordInputs = ({
     onSelectStar,
 }: CoordInputsProps) => {
     const [inputValue, setInputValue] = useState('');
+    const [browseOptions, setBrowseOptions] = useState<Star[]>(initialBrowseStars);
     const [options, setOptions] = useState<Star[]>(initialBrowseStars);
     const [isLoading, setIsLoading] = useState(false);
     const [browsePage, setBrowsePage] = useState(0);
@@ -45,6 +46,7 @@ export const CoordInputs = ({
     const [selectedStar, setSelectedStar] = useState<Star | null>(null);
 
     useEffect(() => {
+        setBrowseOptions(initialBrowseStars);
         setOptions(initialBrowseStars);
         setBrowsePage(0);
         setHasMoreBrowse(initialBrowseStars.length >= BROWSE_PAGE_SIZE);
@@ -55,9 +57,7 @@ export const CoordInputs = ({
         const debounce = window.setTimeout(async () => {
             if (!query) {
                 setIsSearchMode(false);
-                setOptions(initialBrowseStars);
-                setBrowsePage(0);
-                setHasMoreBrowse(initialBrowseStars.length >= BROWSE_PAGE_SIZE);
+                setOptions(browseOptions);
                 return;
             }
 
@@ -78,14 +78,17 @@ export const CoordInputs = ({
         return () => {
             window.clearTimeout(debounce);
         };
-    }, [inputValue, initialBrowseStars, onSearchStars]);
+    }, [browseOptions, inputValue, onSearchStars]);
 
     const loadMoreBrowse = async () => {
         const nextPage = browsePage + 1;
         try {
             setIsLoading(true);
             const nextStars = await onLoadBrowsePage(nextPage, BROWSE_PAGE_SIZE);
-            setOptions((prev) => [...prev, ...nextStars]);
+            setBrowseOptions((prev) => [...prev, ...nextStars]);
+            if (!isSearchMode) {
+                setOptions((prev) => [...prev, ...nextStars]);
+            }
             setBrowsePage(nextPage);
             if (nextStars.length < BROWSE_PAGE_SIZE) {
                 setHasMoreBrowse(false);
