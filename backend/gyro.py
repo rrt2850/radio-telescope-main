@@ -4,7 +4,7 @@ import sys
 
 
 def runExample():
-    print("\nSparkFun 9DoF ICM-20948 Sensor Example 1\n")
+    print("SparkFun 9DoF ICM-20948 Sensor Example 1")
 
     IMU = qwiic_icm20948.QwiicIcm20948()
 
@@ -17,37 +17,41 @@ def runExample():
 
     IMU.begin()
 
-    prev_line = ""
+    prev_line = None
 
     while True:
         if IMU.dataReady():
             IMU.getAgmt()
 
             line = (
-                'ax: {: 06d}'.format(IMU.axRaw)
-                + '\t ay: {: 06d}'.format(IMU.ayRaw)
-                + '\t az: {: 06d}'.format(IMU.azRaw)
-                + '\t gx: {: 06d}'.format(IMU.gxRaw)
-                + '\t gy: {: 06d}'.format(IMU.gyRaw)
-                + '\t gz: {: 06d}'.format(IMU.gzRaw)
-                + '\t mx: {: 06d}'.format(IMU.mxRaw)
-                + '\t my: {: 06d}'.format(IMU.myRaw)
-                + '\t mz: {: 06d}'.format(IMU.mzRaw)
+                f"ax:{IMU.axRaw:6d} "
+                f"ay:{IMU.ayRaw:6d} "
+                f"az:{IMU.azRaw:6d} "
+                f"gx:{IMU.gxRaw:6d} "
+                f"gy:{IMU.gyRaw:6d} "
+                f"gz:{IMU.gzRaw:6d} "
+                f"mx:{IMU.mxRaw:6d} "
+                f"my:{IMU.myRaw:6d} "
+                f"mz:{IMU.mzRaw:6d}"
             )
 
-            # Only update if changed
             if line != prev_line:
-                sys.stdout.write('\r\033[K' + line)
+                sys.stdout.write("\033[0G\033[2K" + line)
                 sys.stdout.flush()
                 prev_line = line
 
             time.sleep(0.03)
+
+        else:
+            sys.stdout.write("\033[0G\033[2KWaiting for data")
+            sys.stdout.flush()
+            time.sleep(0.5)
 
 
 if __name__ == '__main__':
     try:
         runExample()
     except (KeyboardInterrupt, SystemExit):
-        sys.stdout.write('\nEnding Example 1\n')
+        sys.stdout.write("\nEnding Example 1\n")
         sys.stdout.flush()
         sys.exit(0)
