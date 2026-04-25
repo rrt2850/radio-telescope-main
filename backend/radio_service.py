@@ -168,6 +168,11 @@ class RadioDataService:
             self._cold_profile = np.array(self._snapshot.averaged_power_db, dtype=float)
             return True
 
+    def restart_averaging(self) -> None:
+        with self._lock:
+            self._integration_sum = None
+            self._integration_count = 0
+
     def _run(self):
         while not self._stop_event.is_set():
             if self._sdr is None and not self._open_sdr():

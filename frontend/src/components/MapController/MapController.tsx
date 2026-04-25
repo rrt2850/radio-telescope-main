@@ -131,6 +131,10 @@ export const MapController = ({ isTrackMode, onTrackModeChange }: MapControllerP
                 payload,
             );
             console.log(response.data);
+
+            if (!isTrackMode) {
+                await axios.post(`${API_BASE_URL}/radio/restart-average`);
+            }
         } catch (error) {
             console.error('Error sending request:', error);
         }
