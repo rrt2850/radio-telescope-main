@@ -1,6 +1,7 @@
 import serial
 import threading
 import time
+import re
 
 class ArduinoController:
     def __init__(self, port: str, baudrate: int = 115200, timeout: float = 0.1):
@@ -39,6 +40,34 @@ class ArduinoController:
             self.waitForDone()
 
             return cmd
+
+    def GetCurrentPointing(self, timeout: float = 2.0) -> dict[str, float]:
+        """
+        Query the Arduino for its current pointing and return {'alt': float, 'az': float}.
+        Expected response format: POS alt=<altitude_degrees> az=<azimuth_degrees>
+        """
+        with self.serialLock:
+            if not self.IsConnected():
+                raise RuntimeError("Arduino not connected")
+
+            self.ser.reset_input_buffer()
+            self.ser.write(b"P;")
+
+            deadline = time.time() + timeout
+            while time.time() < deadline:
+                line = self.ser.readline()
+                if not line:
+                    continue
+
+                decoded = line.decode("ascii", errors="ignore").strip()
+                match = re.search(r"POS alt=([-+]?\d*\.?\d+)\s+az=([-+]?\d*\.?\d+)", decoded)
+                if match:
+                    return {
+                        "alt": float(match.group(1)),
+                        "az": float(match.group(2)),
+                    }
+
+            raise TimeoutError("Timed out waiting for Arduino position response")
 
     def waitForDone(self, timeout: float = 180.0):
         """

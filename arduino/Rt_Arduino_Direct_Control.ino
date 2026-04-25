@@ -36,6 +36,24 @@ float L; // linac length
 int altTarget; // target position
 float altDelay = 5; // seconds, Altitude motion delay before azimuth motion begins
 
+float feedbackToAltitudeDegrees(uint16_t scaledFeedback) {
+  float normalized = (float)(scaledFeedback - min) / (float)(max - min);
+  if (normalized < 0.0) normalized = 0.0;
+  if (normalized > 1.0) normalized = 1.0;
+
+  float currentLength = Lmin + normalized * (Lmax - Lmin);
+  float cosTerm = (Sd * Sd + Cd * Cd - currentLength * currentLength) / (2.0 * Sd * Cd);
+  if (cosTerm < -1.0) cosTerm = -1.0;
+  if (cosTerm > 1.0) cosTerm = 1.0;
+
+  float altAngleRad = (4.0 * PI / 6.0) - acos(cosTerm);
+  return altAngleRad * 180.0 / PI;
+}
+
+float stepsToAzimuthDegrees(long stepPosition) {
+  return (float)stepPosition * microStepAngle / (gearboxRatio * beltRatio);
+}
+
 void setup() {
 
   // Serial Setup
@@ -175,6 +193,18 @@ void loop() {
       Serial.println("Current State: ");
       Serial.println(currentState);
     }
+
+    // Report current pointing for debug/telemetry
+    if (serialInput[0] == 'P') {
+      uint16_t currentFeedback = jrk.getScaledFeedback();
+      float currentAltDeg = feedbackToAltitudeDegrees(currentFeedback);
+      float currentAzDeg = stepsToAzimuthDegrees(azStepper.currentPosition());
+
+      Serial.print("POS alt=");
+      Serial.print(currentAltDeg, 5);
+      Serial.print(" az=");
+      Serial.println(currentAzDeg, 5);
+    }
   }
 
   switch (currentState) {
@@ -206,4 +236,3 @@ void loop() {
   }
 
 }
-

@@ -256,3 +256,11 @@ body {
 	font-variant-numeric: tabular-nums;
 	box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
 }
+
+.debug-pointing {
+	padding: 10px 12px;
+	border: 1px solid var(--color-border);
+	border-radius: 8px;
+	background: var(--color-surface);
+	box-shadow: 0 6px 14px var(--color-shadow);
+}

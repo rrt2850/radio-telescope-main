@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Stack, Box, Button } from '@mui/material';
+import { Stack, Box, Button, Typography } from '@mui/material';
 import axios from 'axios';
 import { CoordInputs } from './CoordInputs';
 import { ModeSwitches } from './ModeSwitches';
@@ -35,8 +35,11 @@ export const MapController = ({ isTrackMode, onTrackModeChange }: MapControllerP
     const [browseStars, setBrowseStars] = useState<Star[]>([]);
 
     const [duration, setDuration] = useState('60');
+    const [currentPointing, setCurrentPointing] = useState<{ alt: number; az: number } | null>(null);
+    const [pointingError, setPointingError] = useState<string | null>(null);
 
     const isRaDecMode = coordMode === 'radec';
+
     useEffect(() => {
         const loadInitialBrowsePage = async () => {
             try {
@@ -53,6 +56,30 @@ export const MapController = ({ isTrackMode, onTrackModeChange }: MapControllerP
         };
 
         loadInitialBrowsePage();
+    }, []);
+
+    useEffect(() => {
+        let isActive = true;
+
+        const fetchCurrentPointing = async () => {
+            try {
+                const response = await axios.get<{ alt: number; az: number }>(`${API_BASE_URL}/pointing/current`);
+                if (!isActive) return;
+                setCurrentPointing(response.data);
+                setPointingError(null);
+            } catch (error) {
+                if (!isActive) return;
+                setPointingError('Unavailable');
+            }
+        };
+
+        fetchCurrentPointing();
+        const poller = window.setInterval(fetchCurrentPointing, 2000);
+
+        return () => {
+            isActive = false;
+            window.clearInterval(poller);
+        };
     }, []);
 
     const loadBrowsePage = async (page: number, pageSize: number) => {
@@ -174,6 +201,18 @@ export const MapController = ({ isTrackMode, onTrackModeChange }: MapControllerP
                 <Button variant='contained' onClick={handleSubmit}>
                     {isTrackMode ? 'Track' : 'Point'}
                 </Button>
+                <Box className='debug-pointing'>
+                    <Typography variant='subtitle2'>Arduino Pointing (Debug)</Typography>
+                    {currentPointing ? (
+                        <Typography variant='body2'>
+                            Alt: {currentPointing.alt.toFixed(2)}°, Az: {currentPointing.az.toFixed(2)}°
+                        </Typography>
+                    ) : (
+                        <Typography variant='body2'>
+                            {pointingError ?? 'Loading...'}
+                        </Typography>
+                    )}
+                </Box>
             </Stack>
         </Box>
     );
