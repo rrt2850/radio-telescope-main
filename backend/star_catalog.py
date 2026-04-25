@@ -10,7 +10,9 @@ import astropy.units as units
 import constants
 
 CATALOG_PATH = Path(__file__).with_name("data.csv")
-DEFAULT_MIN_BROWSE_ALTITUDE_DEG = 5.0
+# Keep browse/catalog visibility aligned with telescope motion constraints.
+# If a star cannot be pointed to, it should not appear in the "visible" browse pages.
+DEFAULT_MIN_BROWSE_ALTITUDE_DEG = float(constants.MIN_ANGLE)
 
 
 @lru_cache(maxsize=1)
