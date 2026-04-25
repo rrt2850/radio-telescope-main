@@ -1,43 +1,54 @@
 import qwiic_icm20948
 import time
 import sys
- 
+
+
 def runExample():
- 
-    print("\nSparkFun 9DoF ICM-20948 Sensor  Example 1\n")
+    print("\nSparkFun 9DoF ICM-20948 Sensor Example 1\n")
+
     IMU = qwiic_icm20948.QwiicIcm20948()
- 
+
     if IMU.connected == False:
-        print("The Qwiic ICM20948 device isn't connected to the system. Please check your connection", \
-            file=sys.stderr)
+        print(
+            "The Qwiic ICM20948 device isn't connected to the system. Please check your connection",
+            file=sys.stderr
+        )
         return
- 
+
     IMU.begin()
-         
+
     while True:
         if IMU.dataReady():
-            IMU.getAgmt() # read all axis and temp from sensor, note this also updates all instance variables
-            print(
-            '\rax: {: 06d}'.format(IMU.axRaw)
-            + '\t ay: {: 06d}'.format(IMU.ayRaw)
-            + '\t az: {: 06d}'.format(IMU.azRaw)
-            + '\t gx: {: 06d}'.format(IMU.gxRaw)
-            + '\t gy: {: 06d}'.format(IMU.gyRaw)
-            + '\t gz: {: 06d}'.format(IMU.gzRaw)
-            + '\t mx: {: 06d}'.format(IMU.mxRaw)
-            + '\t my: {: 06d}'.format(IMU.myRaw)
-            + '\t mz: {: 06d}'.format(IMU.mzRaw),
-            end='',  # ← prevents newline
-            flush=True  # ← forces immediate update
-        )
+            IMU.getAgmt()
+
+            line = (
+                'ax: {: 06d}'.format(IMU.axRaw)
+                + '\t ay: {: 06d}'.format(IMU.ayRaw)
+                + '\t az: {: 06d}'.format(IMU.azRaw)
+                + '\t gx: {: 06d}'.format(IMU.gxRaw)
+                + '\t gy: {: 06d}'.format(IMU.gyRaw)
+                + '\t gz: {: 06d}'.format(IMU.gzRaw)
+                + '\t mx: {: 06d}'.format(IMU.mxRaw)
+                + '\t my: {: 06d}'.format(IMU.myRaw)
+                + '\t mz: {: 06d}'.format(IMU.mzRaw)
+            )
+
+            # Move to start of line, clear line, write new values
+            sys.stdout.write('\r\033[K' + line)
+            sys.stdout.flush()
+
             time.sleep(0.03)
+
         else:
-            print("Waiting for data")
+            sys.stdout.write('\r\033[KWaiting for data')
+            sys.stdout.flush()
             time.sleep(0.5)
- 
+
+
 if __name__ == '__main__':
     try:
         runExample()
-    except (KeyboardInterrupt, SystemExit) as exErr:
-        print("\nEnding Example 1")
+    except (KeyboardInterrupt, SystemExit):
+        sys.stdout.write('\nEnding Example 1\n')
+        sys.stdout.flush()
         sys.exit(0)
