@@ -1,57 +1,32 @@
-import qwiic_icm20948
 import time
-import sys
+import math
+import board
+import adafruit_mmc56x3
 
+i2c = board.I2C()
+mag = adafruit_mmc56x3.MMC5603(i2c)
 
-def runExample():
-    print("SparkFun 9DoF ICM-20948 Sensor Example 1")
+# Hard-iron offsets: update these after calibration
+OFFSET_X = 0.0
+OFFSET_Y = 0.0
 
-    IMU = qwiic_icm20948.QwiicIcm20948()
+# Magnetic declination for your location.
+# Example: west is negative, east is positive.
+DECLINATION_DEG = 0.0
 
-    if IMU.connected == False:
-        print(
-            "The Qwiic ICM20948 device isn't connected to the system. Please check your connection",
-            file=sys.stderr
-        )
-        return
+def heading_deg(x_uT, y_uT):
+    x = x_uT - OFFSET_X
+    y = y_uT - OFFSET_Y
 
-    IMU.begin()
+    heading = math.degrees(math.atan2(y, x))
+    heading += DECLINATION_DEG
 
-    prev_line = None
+    heading %= 360.0
+    return heading
 
-    while True:
-        if IMU.dataReady():
-            IMU.getAgmt()
+while True:
+    x, y, z = mag.magnetic
+    heading = heading_deg(x, y)
 
-            line = (
-                f"ax:{IMU.axRaw:6d} "
-                f"ay:{IMU.ayRaw:6d} "
-                f"az:{IMU.azRaw:6d} "
-                f"gx:{IMU.gxRaw:6d} "
-                f"gy:{IMU.gyRaw:6d} "
-                f"gz:{IMU.gzRaw:6d} "
-                f"mx:{IMU.mxRaw:6d} "
-                f"my:{IMU.myRaw:6d} "
-                f"mz:{IMU.mzRaw:6d}"
-            )
-
-            if line != prev_line:
-                sys.stdout.write("\r" + line)
-                sys.stdout.flush()
-                prev_line = line
-
-            time.sleep(0.03)
-
-        else:
-            sys.stdout.write("\rWaiting for data          ")
-            sys.stdout.flush()
-            time.sleep(0.5)
-
-
-if __name__ == '__main__':
-    try:
-        runExample()
-    except (KeyboardInterrupt, SystemExit):
-        sys.stdout.write("\nEnding Example 1\n")
-        sys.stdout.flush()
-        sys.exit(0)
+    print(f"X={x:8.2f} uT  Y={y:8.2f} uT  Z={z:8.2f} uT  heading={heading:6.1f}°")
+    time.sleep(0.1)
