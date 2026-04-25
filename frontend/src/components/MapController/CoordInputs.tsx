@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Autocomplete, Box, Button, CircularProgress, TextField, Typography } from '@mui/material';
 import { CoordRow } from './CoordRow';
 
@@ -42,6 +42,7 @@ export const CoordInputs = ({
     const [browsePage, setBrowsePage] = useState(0);
     const [hasMoreBrowse, setHasMoreBrowse] = useState(true);
     const [isSearchMode, setIsSearchMode] = useState(false);
+    const [selectedStar, setSelectedStar] = useState<Star | null>(null);
 
     useEffect(() => {
         setOptions(initialBrowseStars);
@@ -97,10 +98,6 @@ export const CoordInputs = ({
         }
     };
 
-    const selectedStar = useMemo(
-        () => options.find((star) => star.ra.toString() === ra && star.dec.toString() === dec) ?? null,
-        [options, ra, dec],
-    );
 
     return coordMode === 'radec' ? (
         <>
@@ -108,12 +105,29 @@ export const CoordInputs = ({
                 options={options}
                 value={selectedStar}
                 size='small'
-                onChange={(_, value) => onSelectStar(value)}
+                onChange={(_, value) => {
+                    setSelectedStar(value);
+                    onSelectStar(value);
+                }}
                 inputValue={inputValue}
                 onInputChange={(_, value, reason) => {
-                    setInputValue(value);
                     if (reason === 'clear') {
+                        setInputValue('');
+                        setSelectedStar(null);
                         onSelectStar(null);
+                        return;
+                    }
+
+                    if (reason === 'input') {
+                        setInputValue(value);
+                        if (selectedStar) {
+                            setSelectedStar(null);
+                        }
+                        return;
+                    }
+
+                    if (reason === 'selectOption') {
+                        setInputValue(value);
                     }
                 }}
                 isOptionEqualToValue={(option, value) =>
