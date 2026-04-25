@@ -2,6 +2,7 @@ import csv
 from pathlib import Path
 from typing import Any
 from functools import lru_cache
+from datetime import datetime, timezone
 from astropy.coordinates import AltAz, EarthLocation, SkyCoord
 from astropy.time import Time
 import astropy.units as units
@@ -66,14 +67,33 @@ def _filter_stars_by_altitude(
     )
     observation_frame = AltAz(obstime=Time.now(), location=observer_location)
 
-    visible_stars: list[dict[str, Any]] = []
-    for star in stars:
-        target = SkyCoord(star["ra"] * units.deg, star["dec"] * units.deg)
-        altitude = target.transform_to(observation_frame).alt.deg
-        if altitude >= min_altitude_deg:
-            visible_stars.append(star)
+    if not stars:
+        return []
 
-    return visible_stars
+    star_coords = SkyCoord(
+        ra=[star["ra"] for star in stars] * units.deg,
+        dec=[star["dec"] for star in stars] * units.deg,
+    )
+    altitudes = star_coords.transform_to(observation_frame).alt.deg
+
+    return [
+        star
+        for star, altitude in zip(stars, altitudes)
+        if altitude >= min_altitude_deg
+    ]
+
+
+@lru_cache(maxsize=16)
+def _get_visible_stars_for_time_bucket(
+    min_altitude_deg: float,
+    minute_bucket: int,
+) -> list[dict[str, Any]]:
+    # `minute_bucket` intentionally controls cache invalidation cadence.
+    del minute_bucket
+    return _filter_stars_by_altitude(
+        load_star_catalog(),
+        min_altitude_deg=min_altitude_deg,
+    )
 
 
 def get_visible_star_catalog_page(
@@ -81,9 +101,10 @@ def get_visible_star_catalog_page(
     page_size: int,
     min_altitude_deg: float = DEFAULT_MIN_BROWSE_ALTITUDE_DEG,
 ) -> dict[str, Any]:
-    stars = _filter_stars_by_altitude(
-        load_star_catalog(),
+    minute_bucket = int(datetime.now(tz=timezone.utc).timestamp() // 60)
+    stars = _get_visible_stars_for_time_bucket(
         min_altitude_deg=min_altitude_deg,
+        minute_bucket=minute_bucket,
     )
     total = len(stars)
     start = page * page_size
