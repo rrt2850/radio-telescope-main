@@ -17,6 +17,8 @@ def runExample():
 
     IMU.begin()
 
+    prev_line = ""
+
     while True:
         if IMU.dataReady():
             IMU.getAgmt()
@@ -33,16 +35,13 @@ def runExample():
                 + '\t mz: {: 06d}'.format(IMU.mzRaw)
             )
 
-            # Move to start of line, clear line, write new values
-            sys.stdout.write('\r\033[K' + line)
-            sys.stdout.flush()
+            # Only update if changed
+            if line != prev_line:
+                sys.stdout.write('\r\033[K' + line)
+                sys.stdout.flush()
+                prev_line = line
 
             time.sleep(0.03)
-
-        else:
-            sys.stdout.write('\r\033[KWaiting for data')
-            sys.stdout.flush()
-            time.sleep(0.5)
 
 
 if __name__ == '__main__':
