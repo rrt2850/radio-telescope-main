@@ -2,7 +2,7 @@
 import threading
 import time
 from datetime import datetime, timedelta, timezone
-from robutils import CoordsTo
+from robutils import CoordsTo, NormalizePointing
 import constants
 
 trackingLock = threading.Lock()
@@ -32,6 +32,7 @@ def TrackTarget(arduino, ra: float, dec: float, durationSeconds: int):
 
             try:
                 az, alt = CoordsTo(constants.LAT, constants.LONG, constants.HEIGHT, ra, dec)
+                az, alt = NormalizePointing(az, alt)
             except Exception as e:
                 print(f"[ERROR] Failed to compute coordinates while tracking: {e}")
                 break

@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, model_validator
 from typing import Optional
 
-from robutils import CoordsTo
+from robutils import CoordsTo, NormalizePointing
 from ArduinoController import ArduinoController
 
 import constants
@@ -112,6 +112,8 @@ def point(req: PointRequest):
             )
         else:
             az, alt = req.az, req.alt
+
+        az, alt = NormalizePointing(az, alt)
     except Exception as e:
         return JSONResponse(
             status_code=500,

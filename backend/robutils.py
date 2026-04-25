@@ -5,6 +5,23 @@ from astropy.time import Time                   # There are other time libraries
 import astropy.units as units                   # Using astropy's units for strong typing
 import tkinter as tk                            # Library for GUI
 
+
+def NormalizePointing(az: float, alt: float):
+    """
+        Normalize a pointing solution so altitude never exceeds 90 degrees.
+
+        For altitude values in (90, 180], the same sky position can be reached
+        by rotating azimuth by 180 degrees and mirroring altitude:
+            alt' = 180 - alt
+            az' = (az + 180) mod 360
+    """
+    if alt > 90:
+        az = (az + 180) % 360
+        alt = 180 - alt
+
+    return az, alt
+
+
 def CoordsTo(currLat : float, currLong : float, height : float, targetRa : float, targetDec : float):
     """
         Given the current latitude, longitude, and height, assuming the telescope
