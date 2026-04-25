@@ -17,17 +17,19 @@ def runExample():
     while True:
         if IMU.dataReady():
             IMU.getAgmt() # read all axis and temp from sensor, note this also updates all instance variables
-            print(\
-             'ax: {: 06d}'.format(IMU.axRaw)\
-            , '\t', 'ay: {: 06d}'.format(IMU.ayRaw)\
-            , '\t', 'az: {: 06d}'.format(IMU.azRaw)\
-            , '\t', 'gx: {: 06d}'.format(IMU.gxRaw)\
-            , '\t', 'gy: {: 06d}'.format(IMU.gyRaw)\
-            , '\t', 'gz: {: 06d}'.format(IMU.gzRaw)\
-            , '\t', 'mx: {: 06d}'.format(IMU.mxRaw)\
-            , '\t', 'my: {: 06d}'.format(IMU.myRaw)\
-            , '\t', 'mz: {: 06d}'.format(IMU.mzRaw)\
-            )
+            print(
+            '\rax: {: 06d}'.format(IMU.axRaw)
+            + '\t ay: {: 06d}'.format(IMU.ayRaw)
+            + '\t az: {: 06d}'.format(IMU.azRaw)
+            + '\t gx: {: 06d}'.format(IMU.gxRaw)
+            + '\t gy: {: 06d}'.format(IMU.gyRaw)
+            + '\t gz: {: 06d}'.format(IMU.gzRaw)
+            + '\t mx: {: 06d}'.format(IMU.mxRaw)
+            + '\t my: {: 06d}'.format(IMU.myRaw)
+            + '\t mz: {: 06d}'.format(IMU.mzRaw),
+            end='',  # ← prevents newline
+            flush=True  # ← forces immediate update
+        )
             time.sleep(0.03)
         else:
             print("Waiting for data")
