@@ -12,7 +12,7 @@ from tracking import IsTracking, StartTrackingBackground
 from radio_service import RadioDataService
 from star_catalog import (
     load_star_catalog,
-    get_visible_star_catalog_page,
+    get_star_catalog_page,
     search_star_catalog,
 )
 
@@ -221,7 +221,7 @@ def list_stars(
     if page is None:
         return {"stars": load_star_catalog()}
 
-    return get_visible_star_catalog_page(page=page, page_size=page_size)
+    return get_star_catalog_page(page=page, page_size=page_size)
 
 
 @app.get("/stars/page")
@@ -229,7 +229,7 @@ def list_stars_page(
     page: int = Query(default=0, ge=0),
     page_size: int = Query(default=100, ge=1, le=500),
 ):
-    return get_visible_star_catalog_page(page=page, page_size=page_size)
+    return get_star_catalog_page(page=page, page_size=page_size)
 
 
 @app.get("/stars/search")
