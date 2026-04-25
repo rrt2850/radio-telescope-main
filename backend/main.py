@@ -101,12 +101,6 @@ def point(req: PointRequest):
             },
         )
 
-    if not arduino.IsConnected():
-        return JSONResponse(
-            status_code=500,
-            content={"error": "Arduino not connected. Cannot send movement command."},
-        )
-
     try:
         if req.ra is not None and req.dec is not None:
             az, alt = CoordsTo(
@@ -122,6 +116,25 @@ def point(req: PointRequest):
         return JSONResponse(
             status_code=500,
             content={"error": "Coordinate error", "detail": str(e)},
+        )
+
+    if not arduino.IsConnected():
+        if req.ra is not None and req.dec is not None:
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "error": (
+                        "Angle calculated "
+                        f"{{'az': {az:.6f}, 'alt': {alt:.6f}}} but Arduino isn't connected."
+                    ),
+                    "az": az,
+                    "alt": alt,
+                },
+            )
+
+        return JSONResponse(
+            status_code=500,
+            content={"error": "Arduino not connected. Cannot send movement command."},
         )
 
     if alt < constants.MIN_ANGLE:
